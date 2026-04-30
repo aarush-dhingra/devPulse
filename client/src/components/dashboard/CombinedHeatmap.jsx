@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import EmptyState from "../ui/EmptyState";
+import PlatformLogo from "../ui/PlatformLogo";
 
 const CELL = 12;
 const GAP = 3;
@@ -23,10 +24,10 @@ function bucketFor(count, p95) {
 }
 
 const PLATFORM_META = {
-  github: { label: "GitHub", icon: "🐙", color: "#a78bfa", unit: "contributions" },
-  leetcode: { label: "LeetCode", icon: "🧩", color: "#ffa116", unit: "submissions" },
-  codeforces: { label: "Codeforces", icon: "⚔️", color: "#fe646f", unit: "submissions" },
-  wakatime: { label: "Wakatime", icon: "⏱️", color: "#22d3ee", unit: "hours" },
+  github: { id: "github", label: "GitHub", color: "#f0f6fc", unit: "contributions" },
+  leetcode: { id: "leetcode", label: "LeetCode", color: "#ffa116", unit: "submissions" },
+  codeforces: { id: "codeforces", label: "Codeforces", color: "#fe646f", unit: "submissions" },
+  wakatime: { id: "wakatime", label: "Wakatime", color: "#22d3ee", unit: "hours" },
 };
 
 function fmtPlatformValue(key, val) {
@@ -203,9 +204,14 @@ export default function CombinedHeatmap({ data }) {
           {Object.entries(data.perPlatform)
             .filter(([, v]) => v > 0)
             .map(([k, v]) => (
-              <span key={k} className="flex items-center gap-1">
+              <span key={k} className="flex items-center gap-1.5">
+                <PlatformLogo
+                  platform={k}
+                  size={12}
+                  color={PLATFORM_META[k]?.color}
+                />
                 <span className="text-ink-muted">
-                  {PLATFORM_META[k]?.icon} {PLATFORM_META[k]?.label || k}:
+                  {PLATFORM_META[k]?.label || k}:
                 </span>{" "}
                 <span className="text-ink tabular-nums">
                   {k === "wakatime" ? `${Number(v).toFixed(1)}h` : Math.round(Number(v))}
@@ -259,16 +265,15 @@ function FloatingTip({ hover, containerRef }) {
         ) : (
           <ul className="space-y-1">
             {active.map(([k, v]) => {
-              const meta = PLATFORM_META[k] || { label: k, icon: "·", color: "#A78BFA" };
+              const meta = PLATFORM_META[k] || { id: k, label: k, color: "#A78BFA" };
               return (
                 <li key={k} className="flex items-center gap-2 text-sm text-ink">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
-                    style={{ background: meta.color, boxShadow: `0 0 8px ${meta.color}` }}
+                  <PlatformLogo
+                    platform={meta.id || k}
+                    size={14}
+                    color={meta.color}
                   />
-                  <span className="text-ink-muted flex-1">
-                    {meta.icon} {meta.label}
-                  </span>
+                  <span className="text-ink-muted flex-1">{meta.label}</span>
                   <span className="font-semibold tabular-nums">
                     {fmtPlatformValue(k, v)}
                   </span>

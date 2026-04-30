@@ -20,6 +20,7 @@ import Button from "../components/ui/Button";
 import { PLATFORM_BY_ID } from "../utils/constants";
 import { chartTheme } from "../utils/chartConfigs";
 import ChartTooltip from "../components/ui/ChartTooltip";
+import PlatformLogo, { PLATFORM_LOGO_PATHS } from "../components/ui/PlatformLogo";
 
 export default function PlatformDetail({ platform, data }) {
   const meta = PLATFORM_BY_ID[platform];
@@ -44,10 +45,16 @@ export default function PlatformDetail({ platform, data }) {
           ← Overview
         </Link>
         <div
-          className="w-12 h-12 rounded-2xl grid place-items-center text-2xl ring-1 ring-white/10"
-          style={{ background: meta.bg, color: meta.color, boxShadow: `0 0 20px ${meta.color}33` }}
+          className="w-12 h-12 rounded-2xl grid place-items-center ring-1 ring-white/10"
+          style={{ background: meta.bg, boxShadow: `0 0 20px ${meta.color}33` }}
         >
-          {meta.icon}
+          {PLATFORM_LOGO_PATHS[meta.id] ? (
+            <PlatformLogo platform={meta.id} size={22} color={meta.color} />
+          ) : (
+            <span style={{ color: meta.color }} className="text-2xl">
+              {meta.icon}
+            </span>
+          )}
         </div>
         <div>
           <h1 className="font-display font-bold text-2xl">{meta.name}</h1>

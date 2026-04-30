@@ -1,13 +1,14 @@
 import { tierFor, describePercentile } from "../../utils/scoreUtils";
 import useCountUp from "../../hooks/useCountUp";
 import { useEffect, useRef } from "react";
+import PlatformLogo from "../ui/PlatformLogo";
 
 const COMPONENT_META = [
-  { key: "github", label: "GitHub", color: "#a3a3a3", icon: "🐙" },
-  { key: "leetcode", label: "LeetCode", color: "#ffa116", icon: "🧩" },
-  { key: "wakatime", label: "Wakatime", color: "#22d3ee", icon: "⏱️" },
-  { key: "codeforces", label: "Codeforces", color: "#fe646f", icon: "🏆" },
-  { key: "gfg", label: "GeeksForGeeks", color: "#10b981", icon: "🧠" },
+  { key: "github", label: "GitHub", color: "#e6edf3" },
+  { key: "leetcode", label: "LeetCode", color: "#ffa116" },
+  { key: "wakatime", label: "Wakatime", color: "#22d3ee" },
+  { key: "codeforces", label: "Codeforces", color: "#fe646f" },
+  { key: "gfg", label: "GeeksForGeeks", color: "#10b981" },
 ];
 
 export default function DevScoreCard({ devscore }) {
@@ -122,7 +123,8 @@ export default function DevScoreCard({ devscore }) {
                 <div key={c.key}>
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="text-ink-muted flex items-center gap-1.5">
-                      <span aria-hidden>{c.icon}</span> {c.label}
+                      <PlatformLogo platform={c.key} size={12} color={c.color} />
+                      {c.label}
                     </span>
                     <span className="font-mono text-ink-muted">{v}<span className="text-ink-faint">/100</span></span>
                   </div>

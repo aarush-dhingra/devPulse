@@ -3,15 +3,16 @@ import { ROUTES } from "../../utils/constants";
 import { useAuth } from "../../hooks/useAuth";
 import { tierFor } from "../../utils/scoreUtils";
 import { useStatsStore } from "../../store/statsStore";
+import PlatformLogo from "../ui/PlatformLogo";
 
 const items = [
   { to: ROUTES.dashboard, label: "Overview", icon: GridIcon },
-  { to: "/dashboard/github", label: "GitHub", icon: PlatformIcon("🐙") },
-  { to: "/dashboard/leetcode", label: "LeetCode", icon: PlatformIcon("🧩") },
-  { to: "/dashboard/gfg", label: "GeeksForGeeks", icon: PlatformIcon("🧠") },
-  { to: "/dashboard/codeforces", label: "Codeforces", icon: PlatformIcon("⚔️") },
-  { to: "/dashboard/wakatime", label: "Wakatime", icon: PlatformIcon("⏱️") },
-  { to: "/dashboard/devto", label: "Dev.to", icon: PlatformIcon("✍️") },
+  { to: "/dashboard/github", label: "GitHub", icon: PlatformIcon("github") },
+  { to: "/dashboard/leetcode", label: "LeetCode", icon: PlatformIcon("leetcode") },
+  { to: "/dashboard/gfg", label: "GeeksForGeeks", icon: PlatformIcon("gfg") },
+  { to: "/dashboard/codeforces", label: "Codeforces", icon: PlatformIcon("codeforces") },
+  { to: "/dashboard/wakatime", label: "Wakatime", icon: PlatformIcon("wakatime") },
+  { to: "/dashboard/devto", label: "Dev.to", icon: PlatformIcon("devto") },
   { to: ROUTES.leaderboard, label: "Leaderboard", icon: TrophyIcon, divider: true },
   { to: ROUTES.community, label: "Community", icon: GlobeIcon },
   { to: ROUTES.wrapped, label: "Wrapped", icon: GiftIcon },
@@ -25,7 +26,7 @@ export default function Sidebar() {
   const tier = data?.devscore?.tier || tierFor(score);
 
   return (
-    <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-white/[0.05] bg-bg-panel/60 backdrop-blur-xl sticky top-0 h-screen z-20">
+    <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-white/[0.05] bg-black/80 backdrop-blur-xl sticky top-0 h-screen z-20">
       <Link to="/" className="flex items-center gap-2.5 px-5 py-4">
         <span className="grid place-items-center w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-cyan-500 glow-violet">
           <span className="text-white font-black">⚡</span>
@@ -128,9 +129,15 @@ export default function Sidebar() {
   );
 }
 
-function PlatformIcon(emoji) {
-  return function Icon() {
-    return <span className="text-base leading-none">{emoji}</span>;
+function PlatformIcon(platformId) {
+  return function Icon({ active }) {
+    return (
+      <PlatformLogo
+        platform={platformId}
+        size={16}
+        className={active ? "text-accent-200" : "text-ink-muted"}
+      />
+    );
   };
 }
 
@@ -142,15 +149,25 @@ function SidebarStreak({ data }) {
   const wt = stats.wakatime || {};
   const gfg = stats.gfg || {};
 
-  // Build a 7-day map keyed by ISO date (UTC).
+  // Build the trailing 7 days starting on Monday → Sunday.
+  // The reference image uses M T W T F S S column order.
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
+  const todayDow = today.getUTCDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+  // Distance back to the most recent Monday.
+  const sinceMonday = (todayDow + 6) % 7;
+  const monday = new Date(today.getTime() - sinceMonday * 86400000);
+
   const days = [];
-  for (let i = 6; i >= 0; i -= 1) {
-    const d = new Date(today.getTime() - i * 86400000);
-    days.push(d.toISOString().slice(0, 10));
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(monday.getTime() + i * 86400000);
+    days.push({
+      iso: d.toISOString().slice(0, 10),
+      future: d.getTime() > today.getTime(),
+    });
   }
-  const totals = Object.fromEntries(days.map((d) => [d, 0]));
+
+  const totals = Object.fromEntries(days.map((d) => [d.iso, 0]));
   const add = (date, n) => {
     if (date in totals) totals[date] += Number(n) || 0;
   };
@@ -159,54 +176,62 @@ function SidebarStreak({ data }) {
   for (const d of cf.dailySubmissions || []) add(d.date, d.count);
   for (const d of wt.dailyHours || []) add(d.date, d.hours);
 
-  const dayLetters = ["S", "M", "T", "W", "T", "F", "S"];
-  const todayDow = today.getUTCDay();
+  const dayLetters = ["M", "T", "W", "T", "F", "S", "S"];
 
-  // Streak (combined): use the same formula as combined heatmap but cheaper.
+  // Streak (combined): take the strongest signal we have.
   const streak = Math.max(
     Number(gh.contributions?.streakCurrent || 0),
     Number(gfg.streak || 0)
   );
 
   return (
-    <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.03] p-3">
+    <div className="mt-4 rounded-2xl border border-white/[0.06] bg-black/40 p-4">
       <div className="flex items-center gap-2">
-        <span className="text-xl leading-none">🔥</span>
-        <span className="font-display font-bold text-2xl tabular-nums">
+        <span className="text-2xl leading-none drop-shadow-[0_0_8px_rgba(251,146,60,0.55)]">
+          🔥
+        </span>
+        <span className="font-display font-extrabold text-3xl tabular-nums tracking-tight">
           {streak}
         </span>
-        <span className="ml-auto text-[10px] uppercase tracking-wider text-ink-faint">
-          Day Streak
-        </span>
       </div>
-      <div className="mt-2.5 grid grid-cols-7 gap-1.5">
-        {days.map((date, idx) => {
-          const dow = (todayDow - 6 + idx + 7) % 7;
-          const active = totals[date] > 0;
+      <div className="mt-1 text-sm font-medium text-ink-muted">Day Streak</div>
+
+      <div className="mt-4 grid grid-cols-7 gap-1.5">
+        {dayLetters.map((letter, idx) => (
+          <div
+            key={`hdr-${idx}`}
+            className="text-center text-[11px] font-semibold uppercase tracking-wider text-ink-muted"
+          >
+            {letter}
+          </div>
+        ))}
+        {days.map((d, idx) => {
+          const active = totals[d.iso] > 0;
+          const isToday = d.iso === today.toISOString().slice(0, 10);
           return (
-            <div key={date} className="flex flex-col items-center gap-1">
-              <div
-                className={`w-6 h-6 rounded-md grid place-items-center text-[10px] transition ${
-                  active
-                    ? "bg-gradient-to-br from-accent-500/40 to-cyan-500/30 text-ink ring-1 ring-accent-500/40"
-                    : "bg-white/[0.04] text-ink-faint ring-1 ring-white/5"
-                }`}
-                style={
-                  active
-                    ? { boxShadow: "0 0 10px rgba(167,139,250,0.4)" }
-                    : undefined
-                }
-                title={`${date}${active ? "" : " — no activity"}`}
-              >
-                {active ? "✓" : ""}
-              </div>
+            <div key={d.iso} className="flex justify-center">
               <span
-                className={`text-[9px] uppercase ${
-                  idx === 6 ? "text-accent-300 font-bold" : "text-ink-faint"
+                className="block rounded-full"
+                style={{
+                  width: 18,
+                  height: 18,
+                  background: d.future
+                    ? "rgba(255,255,255,0.04)"
+                    : active
+                    ? "radial-gradient(circle at 30% 30%, #34d399, #10b981 70%)"
+                    : "rgba(255,255,255,0.06)",
+                  boxShadow: active
+                    ? "0 0 10px rgba(16,185,129,0.55), inset 0 0 6px rgba(255,255,255,0.18)"
+                    : "inset 0 0 0 1px rgba(255,255,255,0.07)",
+                  outline: isToday
+                    ? "1.5px solid rgba(255,255,255,0.45)"
+                    : "none",
+                  outlineOffset: 2,
+                }}
+                title={`${d.iso}${
+                  d.future ? "" : active ? " — active" : " — no activity"
                 }`}
-              >
-                {dayLetters[dow]}
-              </span>
+              />
             </div>
           );
         })}

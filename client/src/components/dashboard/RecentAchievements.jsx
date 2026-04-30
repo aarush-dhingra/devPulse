@@ -1,13 +1,14 @@
 import { useState } from "react";
 import EmptyState from "../ui/EmptyState";
 import { relativeTime } from "../../utils/formatters";
+import PlatformLogo, { PLATFORM_LOGO_PATHS } from "../ui/PlatformLogo";
 
 const SOURCE_META = {
   internal: { label: "DevPulse", color: "rgba(124,58,237,0.18)" },
-  leetcode: { label: "LeetCode", color: "rgba(255,161,22,0.18)" },
-  github: { label: "GitHub", color: "rgba(255,255,255,0.10)" },
-  codeforces: { label: "Codeforces", color: "rgba(254,100,111,0.18)" },
-  gfg: { label: "GFG", color: "rgba(47,141,70,0.18)" },
+  leetcode: { label: "LeetCode", color: "rgba(255,161,22,0.18)", brand: "#ffa116" },
+  github: { label: "GitHub", color: "rgba(255,255,255,0.10)", brand: "#e6edf3" },
+  codeforces: { label: "Codeforces", color: "rgba(254,100,111,0.18)", brand: "#fe646f" },
+  gfg: { label: "GFG", color: "rgba(47,141,70,0.18)", brand: "#2f8d46" },
 };
 
 function normalizeIcon(icon, source) {
@@ -200,6 +201,12 @@ export default function RecentAchievements({ badges = [], stats, limit = 8 }) {
                         onError={(e) => {
                           e.currentTarget.style.display = "none";
                         }}
+                      />
+                    ) : PLATFORM_LOGO_PATHS[b.source] ? (
+                      <PlatformLogo
+                        platform={b.source}
+                        size={20}
+                        color={meta.brand}
                       />
                     ) : (
                       <span>{b.icon || "🏅"}</span>

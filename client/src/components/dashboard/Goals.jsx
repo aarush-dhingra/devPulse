@@ -2,14 +2,24 @@ import { useEffect, useState } from "react";
 import Button from "../ui/Button";
 import { goalsApi } from "../../api/goals.api";
 import EmptyState from "../ui/EmptyState";
+import PlatformLogo from "../ui/PlatformLogo";
 
 const KIND_META = {
-  leetcode_solves: { label: "LeetCode solves", icon: "🧩", accent: "#ffa116" },
-  github_commits: { label: "GitHub commits", icon: "🐙", accent: "#a78bfa" },
-  wakatime_hours: { label: "Wakatime hours (30d)", icon: "⏱️", accent: "#22d3ee" },
-  streak: { label: "Streak (days)", icon: "🔥", accent: "#fb923c" },
-  custom: { label: "Custom", icon: "🎯", accent: "#94a3b8" },
+  leetcode_solves: { label: "LeetCode solves", platform: "leetcode", emoji: "🧩", accent: "#ffa116" },
+  github_commits: { label: "GitHub commits", platform: "github", emoji: "🐙", accent: "#e6edf3" },
+  wakatime_hours: { label: "Wakatime hours (30d)", platform: "wakatime", emoji: "⏱️", accent: "#22d3ee" },
+  streak: { label: "Streak (days)", emoji: "🔥", accent: "#fb923c" },
+  custom: { label: "Custom", emoji: "🎯", accent: "#94a3b8" },
 };
+
+function KindIcon({ kind, size = 16, color }) {
+  const m = KIND_META[kind];
+  if (!m) return null;
+  if (m.platform) {
+    return <PlatformLogo platform={m.platform} size={size} color={color || m.accent} />;
+  }
+  return <span className="text-base leading-none">{m.emoji}</span>;
+}
 
 export default function Goals() {
   const [goals, setGoals] = useState([]);
@@ -80,7 +90,7 @@ export default function Goals() {
                 className="rounded-xl border border-white/5 bg-white/[0.02] hover:border-accent-500/30 transition px-3 py-2.5"
               >
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-base leading-none">{meta.icon}</span>
+                  <KindIcon kind={g.kind} size={14} />
                   <span className="font-semibold text-sm truncate flex-1">{g.title}</span>
                   {done && (
                     <span className="pill-good text-[10px]">Achieved</span>
@@ -161,7 +171,7 @@ function AddGoalForm({ onSubmit, onCancel }) {
         >
           {Object.entries(KIND_META).map(([k, m]) => (
             <option key={k} value={k}>
-              {m.icon} {m.label}
+              {m.emoji} {m.label}
             </option>
           ))}
         </select>

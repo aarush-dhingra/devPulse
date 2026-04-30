@@ -40,7 +40,7 @@ export default function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-10 bg-bg/70 backdrop-blur-xl border-b border-white/[0.05]">
+    <header className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/[0.05]">
       <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-4">
         <div className="hidden md:block min-w-0 flex-1">
           <div className="flex items-baseline gap-3">

@@ -3,6 +3,7 @@ import { useStats } from "../hooks/useStats";
 import { useAuth } from "../hooks/useAuth";
 import DevScoreCard from "../components/dashboard/DevScoreCard";
 import StatCard from "../components/dashboard/StatCard";
+import PlatformLogo from "../components/ui/PlatformLogo";
 import ContributionHeatmap from "../components/dashboard/ContributionHeatmap";
 import LanguageRadar from "../components/dashboard/LanguageRadar";
 import CodingHoursChart from "../components/dashboard/CodingHoursChart";
@@ -79,10 +80,10 @@ export default function PublicProfile() {
       <DevScoreCard devscore={data.devscore} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="GitHub Commits" value={gh.commits?.totalSearched ?? gh.contributions?.total ?? 0} icon="🐙" accent="#94a3b8" />
-        <StatCard label="LeetCode Solved" value={lc.solved?.total ?? 0} icon="🧩" accent="#ffa116" />
-        <StatCard label="Wakatime 30d" value={`${Math.round(wt.hoursLast30Days ?? 0)}h`} format="raw" icon="⏱️" accent="#22d3ee" />
-        <StatCard label="Codeforces" value={cf.rating ?? 0} icon="🏆" accent="#fe646f" />
+        <StatCard label="GitHub Commits" value={gh.commits?.totalSearched ?? gh.contributions?.total ?? 0} icon={<PlatformLogo platform="github" size={18} />} accent="#e6edf3" />
+        <StatCard label="LeetCode Solved" value={lc.solved?.total ?? 0} icon={<PlatformLogo platform="leetcode" size={18} />} accent="#ffa116" />
+        <StatCard label="Wakatime 30d" value={`${Math.round(wt.hoursLast30Days ?? 0)}h`} format="raw" icon={<PlatformLogo platform="wakatime" size={18} />} accent="#22d3ee" />
+        <StatCard label="Codeforces" value={cf.rating ?? 0} icon={<PlatformLogo platform="codeforces" size={18} />} accent="#fe646f" />
       </div>
 
       <PlatformBadges platforms={data.platforms || []} />

@@ -23,6 +23,7 @@ import { ROUTES } from "../utils/constants";
 import PlatformDetail from "./PlatformDetail";
 
 import { dashboardApi } from "../api/dashboard.api";
+import PlatformLogo from "../components/ui/PlatformLogo";
 
 export default function Dashboard() {
   const { platform } = useParams();
@@ -105,7 +106,7 @@ export default function Dashboard() {
           label="Coding · 30d"
           value={codingHours30}
           suffix="h"
-          icon="⏱️"
+          icon={<PlatformLogo platform="wakatime" size={12} />}
           accent="#22d3ee"
           to="/dashboard/wakatime"
           spark={wakaSpark}
@@ -113,7 +114,7 @@ export default function Dashboard() {
         <StatTile
           label="Problems Solved"
           value={totalProblems}
-          icon="🧩"
+          icon={<PlatformLogo platform="leetcode" size={12} />}
           accent="#ffa116"
           to="/dashboard/leetcode"
           spark={lcSpark}
@@ -130,8 +131,8 @@ export default function Dashboard() {
         <StatTile
           label="Commits"
           value={totalCommits}
-          icon="🐙"
-          accent="#94a3b8"
+          icon={<PlatformLogo platform="github" size={12} />}
+          accent="#e6edf3"
           to="/dashboard/github"
           spark={githubSpark}
         />

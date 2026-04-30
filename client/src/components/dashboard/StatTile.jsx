@@ -58,7 +58,14 @@ export default function StatTile({
       <div className="relative flex items-start justify-between">
         <div>
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-ink-faint">
-            {icon && <span className="text-sm leading-none">{icon}</span>}
+            {icon &&
+              (typeof icon === "string" ? (
+                <span className="text-sm leading-none">{icon}</span>
+              ) : (
+                <span className="inline-flex items-center" style={{ color: accent }}>
+                  {icon}
+                </span>
+              ))}
             <span>{label}</span>
           </div>
           <div className="mt-1.5 flex items-baseline gap-1">

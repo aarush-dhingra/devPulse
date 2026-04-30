@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { usePlatforms } from "../hooks/usePlatforms";
 import { PLATFORMS } from "../utils/constants";
 import { relativeTime } from "../utils/formatters";
+import PlatformLogo from "../components/ui/PlatformLogo";
 
 const PLATFORM_HELP = {
   github: { url: "https://github.com", text: "Sign in with GitHub above to auto-connect." },
@@ -95,14 +96,13 @@ export default function Settings() {
                 />
                 <div className="flex items-start gap-3">
                   <div
-                    className="w-12 h-12 rounded-2xl grid place-items-center text-xl ring-1 ring-white/10 shrink-0"
+                    className="w-12 h-12 rounded-2xl grid place-items-center ring-1 ring-white/10 shrink-0"
                     style={{
                       background: p.bg,
-                      color: p.color,
                       boxShadow: `0 0 22px ${p.color}33`,
                     }}
                   >
-                    {p.icon}
+                    <PlatformLogo platform={p.id} size={22} color={p.color} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">

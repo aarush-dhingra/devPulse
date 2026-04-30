@@ -6,15 +6,15 @@ export default {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#070b18",
-          panel: "#0c1226",
-          card: "#0f1530",
-          deep: "#040611",
-          elev: "#141b3a",
+          DEFAULT: "#000000",
+          panel: "#070707",
+          card: "#0a0a0a",
+          deep: "#000000",
+          elev: "#111111",
         },
         line: {
-          DEFAULT: "rgba(124, 92, 255, 0.12)",
-          strong: "rgba(124, 92, 255, 0.28)",
+          DEFAULT: "rgba(255, 255, 255, 0.06)",
+          strong: "rgba(255, 255, 255, 0.14)",
         },
         accent: {
           DEFAULT: "#8b5cf6",
