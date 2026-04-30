@@ -1,28 +1,40 @@
 import { useEffect, useRef, useState } from "react";
 import { pomodoroApi } from "../../api/pomodoro.api";
 
-const PHASES = {
-  focus: { label: "Focus", durationSec: 25 * 60, color: "#A78BFA" },
-  short_break: { label: "Short break", durationSec: 5 * 60, color: "#22d3ee" },
-  long_break: { label: "Long break", durationSec: 15 * 60, color: "#f472b6" },
+const DEFAULTS = {
+  focus: 25,
+  short_break: 5,
+  long_break: 15,
 };
 
-const STORAGE_KEY = "devpulse:pomodoro:v1";
+const PHASE_META = {
+  focus: { label: "Focus", color: "#A78BFA" },
+  short_break: { label: "Short", color: "#22d3ee" },
+  long_break: { label: "Long", color: "#f472b6" },
+};
 
-function loadState() {
+const STORAGE_KEY = "devpulse:pomodoro:v2";
+const SETTINGS_KEY = "devpulse:pomodoro:settings:v1";
+
+const MIN_MINUTES = 1;
+const MAX_MINUTES = 120;
+
+function loadJSON(key, fallback) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
     const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object") return null;
+    if (!obj || typeof obj !== "object") return fallback;
     return obj;
-  } catch { return null; }
+  } catch { return fallback; }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
 }
 
-function saveState(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch { /* ignore */ }
+function clampMinutes(n) {
+  const v = Math.round(Number(n) || 0);
+  return Math.max(MIN_MINUTES, Math.min(MAX_MINUTES, v));
 }
 
 function fmtTime(secs) {
@@ -32,18 +44,25 @@ function fmtTime(secs) {
 }
 
 export default function FocusMode() {
+  const [settings, setSettings] = useState(() =>
+    loadJSON(SETTINGS_KEY, DEFAULTS)
+  );
+  const [showSettings, setShowSettings] = useState(false);
   const [phase, setPhase] = useState("focus");
   const [running, setRunning] = useState(false);
   const [endsAt, setEndsAt] = useState(null);
-  const [remaining, setRemaining] = useState(PHASES.focus.durationSec);
+  const [remaining, setRemaining] = useState((settings.focus || DEFAULTS.focus) * 60);
   const [completedToday, setCompletedToday] = useState(0);
   const [focusMinutes, setFocusMinutes] = useState(0);
   const tickRef = useRef(null);
   const hasFiredCompletionRef = useRef(false);
 
+  const phaseSeconds = (p, s = settings) =>
+    clampMinutes(s[p] ?? DEFAULTS[p]) * 60;
+
   useEffect(() => {
-    const s = loadState();
-    if (s?.phase && PHASES[s.phase]) setPhase(s.phase);
+    const s = loadJSON(STORAGE_KEY, null);
+    if (s?.phase && PHASE_META[s.phase]) setPhase(s.phase);
     if (s?.endsAt) {
       setEndsAt(s.endsAt);
       const left = Math.round((s.endsAt - Date.now()) / 1000);
@@ -51,10 +70,11 @@ export default function FocusMode() {
         setRunning(true);
         setRemaining(left);
       } else {
-        setRemaining(PHASES[s.phase || "focus"].durationSec);
+        setRemaining(phaseSeconds(s.phase || "focus"));
       }
     }
     refreshSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refreshSummary = async () => {
@@ -79,15 +99,17 @@ export default function FocusMode() {
     tick();
     tickRef.current = setInterval(tick, 1000);
     return () => clearInterval(tickRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, endsAt]);
 
   useEffect(() => {
-    saveState({ phase, running, endsAt });
+    saveJSON(STORAGE_KEY, { phase, running, endsAt });
   }, [phase, running, endsAt]);
 
   const start = () => {
-    const dur = PHASES[phase].durationSec;
-    const newEnd = Date.now() + (remaining > 0 && remaining <= dur ? remaining : dur) * 1000;
+    const dur = phaseSeconds(phase);
+    const useRemaining = remaining > 0 && remaining <= dur;
+    const newEnd = Date.now() + (useRemaining ? remaining : dur) * 1000;
     setEndsAt(newEnd);
     setRunning(true);
   };
@@ -101,13 +123,13 @@ export default function FocusMode() {
   const reset = () => {
     setRunning(false);
     setEndsAt(null);
-    setRemaining(PHASES[phase].durationSec);
+    setRemaining(phaseSeconds(phase));
   };
   const switchPhase = (p) => {
     setRunning(false);
     setEndsAt(null);
     setPhase(p);
-    setRemaining(PHASES[p].durationSec);
+    setRemaining(phaseSeconds(p));
   };
 
   const complete = async () => {
@@ -117,46 +139,115 @@ export default function FocusMode() {
     try {
       await pomodoroApi.log({
         kind: phase,
-        durationSeconds: PHASES[phase].durationSec,
+        durationSeconds: phaseSeconds(phase),
       });
       refreshSummary();
     } catch { /* ignore */ }
-    // Auto-cycle: focus -> short_break, short_break -> focus
     setTimeout(() => {
       if (phase === "focus") switchPhase("short_break");
       else switchPhase("focus");
     }, 600);
   };
 
-  const dur = PHASES[phase].durationSec;
-  const ratio = Math.max(0, Math.min(1, 1 - remaining / dur));
-  const accent = PHASES[phase].color;
+  const updateSetting = (key, value) => {
+    const next = { ...settings, [key]: clampMinutes(value) };
+    setSettings(next);
+    saveJSON(SETTINGS_KEY, next);
+    if (!running) setRemaining(clampMinutes(next[phase]) * 60);
+  };
 
-  // Circular progress ring
+  const resetSettings = () => {
+    setSettings(DEFAULTS);
+    saveJSON(SETTINGS_KEY, DEFAULTS);
+    if (!running) setRemaining(DEFAULTS[phase] * 60);
+  };
+
+  const dur = phaseSeconds(phase);
+  const ratio = Math.max(0, Math.min(1, 1 - remaining / dur));
+  const accent = PHASE_META[phase].color;
+
   const R = 64;
   const C = 2 * Math.PI * R;
   const dashOffset = C * (1 - ratio);
 
   return (
     <div className="panel-pad">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-2">
         <h3 className="font-display font-bold text-lg">Focus Mode</h3>
-        <div className="flex items-center gap-1 rounded-full bg-white/[0.04] p-1 text-[11px]">
-          {Object.entries(PHASES).map(([k, p]) => (
-            <button
-              key={k}
-              onClick={() => switchPhase(k)}
-              className={`px-2.5 py-1 rounded-full uppercase tracking-wider transition ${
-                phase === k
-                  ? "bg-accent-500/20 text-accent-200 ring-1 ring-accent-500/40"
-                  : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 rounded-full bg-white/[0.04] p-1 text-[11px]">
+            {Object.entries(PHASE_META).map(([k, p]) => (
+              <button
+                key={k}
+                onClick={() => switchPhase(k)}
+                className={`px-2.5 py-1 rounded-full uppercase tracking-wider transition ${
+                  phase === k
+                    ? "bg-accent-500/20 text-accent-200 ring-1 ring-accent-500/40"
+                    : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowSettings((v) => !v)}
+            className={`w-7 h-7 grid place-items-center rounded-full border transition text-[13px] ${
+              showSettings
+                ? "border-accent-500/40 bg-accent-500/10 text-accent-200"
+                : "border-white/10 bg-white/[0.04] text-ink-muted hover:text-ink"
+            }`}
+            aria-label="Customize timers"
+            title="Customize timers"
+          >
+            ⚙
+          </button>
         </div>
       </div>
+
+      {showSettings && (
+        <div className="mb-3 rounded-xl border border-accent-500/20 bg-accent-500/5 p-3 space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-ink-faint">
+            Customize durations (minutes)
+          </div>
+          {Object.keys(DEFAULTS).map((k) => (
+            <div key={k} className="flex items-center gap-2">
+              <span className="text-xs text-ink-muted w-24">{PHASE_META[k].label}</span>
+              <input
+                type="range"
+                min={MIN_MINUTES}
+                max={MAX_MINUTES}
+                value={settings[k]}
+                onChange={(e) => updateSetting(k, e.target.value)}
+                className="flex-1 accent-accent-500"
+                disabled={running && phase === k}
+              />
+              <input
+                type="number"
+                min={MIN_MINUTES}
+                max={MAX_MINUTES}
+                value={settings[k]}
+                onChange={(e) => updateSetting(k, e.target.value)}
+                disabled={running && phase === k}
+                className="input !w-16 !py-1 !px-2 text-center"
+              />
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-1">
+            {running && (
+              <span className="text-[11px] text-warn">
+                Pause to edit the active phase.
+              </span>
+            )}
+            <button
+              onClick={resetSettings}
+              className="ml-auto text-[11px] uppercase tracking-wider text-ink-faint hover:text-ink transition"
+            >
+              Reset to 25 / 5 / 15
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid place-items-center my-3">
         <div className="relative">
@@ -191,7 +282,7 @@ export default function FocusMode() {
                 {fmtTime(remaining)}
               </div>
               <div className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mt-1">
-                {PHASES[phase].label}
+                {PHASE_META[phase].label} · {settings[phase]}m
               </div>
             </div>
           </div>

@@ -166,10 +166,15 @@ export default function Dashboard() {
           onPeriodChange={setSeriesPeriod}
         />
         <LanguageRadar
-          languages={
-            gh.repos?.languages ||
-            Object.fromEntries((wt.languages || []).map((l) => [l.name, l.percent]))
-          }
+          subtitle="GitHub + Wakatime"
+          sources={[
+            gh.repos?.languages || null,
+            (wt.languages || []).length
+              ? Object.fromEntries(
+                  (wt.languages || []).map((l) => [l.name, l.percent || l.hours || 0])
+                )
+              : null,
+          ]}
         />
       </div>
 
@@ -179,7 +184,7 @@ export default function Dashboard() {
           daily={series?.codingTime?.daily || []}
           weekly={series?.codingTime?.weekly || []}
         />
-        <RecentAchievements badges={data.badges || []} />
+          <RecentAchievements badges={data.badges || []} stats={stats} />
       </div>
 
       {/* Row 5 — Active Projects + Goals + Focus/QOTD */}

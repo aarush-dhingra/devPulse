@@ -9,8 +9,46 @@ import { colorForLang } from "../../utils/constants";
 import EmptyState from "../ui/EmptyState";
 import ChartTooltip from "../ui/ChartTooltip";
 
-export default function LanguageRadar({ languages = {}, title = "Language Breakdown" }) {
-  const entries = Object.entries(languages || {});
+/**
+ * Merges multiple per-platform language maps into one normalized weight map.
+ * Each source is normalized to sum to 1 first, then summed and re-normalized
+ * to 100. This way a platform with absolute counts (GitHub repo counts) and
+ * a platform with percentages (Wakatime) contribute fairly.
+ */
+function mergeSources(sources) {
+  const merged = {};
+  let nSources = 0;
+  for (const src of sources) {
+    if (!src) continue;
+    const entries = Object.entries(src).filter(([, v]) => Number(v) > 0);
+    if (!entries.length) continue;
+    nSources += 1;
+    const sum = entries.reduce((s, [, v]) => s + Number(v), 0);
+    if (sum <= 0) continue;
+    for (const [name, val] of entries) {
+      const norm = Number(val) / sum;
+      merged[name] = (merged[name] || 0) + norm;
+    }
+  }
+  if (!nSources) return {};
+  // Convert back to relative weights (the raw merged is in [0, nSources]).
+  const totalWeight = Object.values(merged).reduce((a, b) => a + b, 0);
+  if (totalWeight <= 0) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(merged)) {
+    out[k] = (v / totalWeight) * 100;
+  }
+  return out;
+}
+
+export default function LanguageRadar({
+  languages,
+  sources,
+  title = "Language Breakdown",
+  subtitle,
+}) {
+  const merged = sources && sources.length ? mergeSources(sources) : (languages || {});
+  const entries = Object.entries(merged);
   if (!entries.length) {
     return (
       <div className="panel-pad">
@@ -47,7 +85,14 @@ export default function LanguageRadar({ languages = {}, title = "Language Breakd
 
   return (
     <div className="panel-pad">
-      <h3 className="font-display font-bold text-lg mb-2">{title}</h3>
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+        <h3 className="font-display font-bold text-lg">{title}</h3>
+        {subtitle && (
+          <span className="text-[10px] uppercase tracking-wider text-ink-faint">
+            {subtitle}
+          </span>
+        )}
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-4 items-center">
         <div className="relative h-[200px]">
           <ResponsiveContainer>

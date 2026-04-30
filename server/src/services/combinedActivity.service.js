@@ -152,41 +152,73 @@ async function buildHeatmap(userId) {
 
 /**
  * Multi-line problems-solved series (cumulative) by day.
- * Returns { dates, leetcode, codeforces, gfg } arrays.
+ *
+ * The submission-calendar APIs return daily *submission* counts (not unique
+ * problems), so naively cumulating them can wildly exceed the user's actual
+ * solved count. We use a two-pass approach:
+ *
+ * 1. Build raw per-day submission counts inside the window.
+ * 2. Compute each platform's contribution INSIDE the window as a fraction of
+ *    its total submissions ever (window_sum / all_time_sum), then multiply
+ *    that fraction by the platform's known total problems solved. This gives
+ *    an anchored end-value (cumulative-at-end ≤ total problems solved).
+ * 3. Finally scale each day proportionally so the cumulative line ends at the
+ *    anchored value.
  */
 async function buildProblemsSeries(userId, days = 90) {
   const stats = await statsModel.getLatestForUser(userId);
   const dates = windowDates(days);
 
-  const dailyLC = {};
-  for (const d of stats?.leetcode?.dailySubmissions || []) {
-    if (d?.date) dailyLC[d.date] = (dailyLC[d.date] || 0) + Number(d.count || 0);
-  }
-  const dailyCF = {};
-  for (const d of stats?.codeforces?.dailySubmissions || []) {
-    if (d?.date) dailyCF[d.date] = (dailyCF[d.date] || 0) + Number(d.count || 0);
-  }
-
-  // GFG has no daily endpoint; smear current total flat across the window.
-  const gfgTotal = Number(stats?.gfg?.problemsSolved || 0);
-  const gfgFlatPerDay = gfgTotal && days > 0 ? gfgTotal / days : 0;
-
-  let lcCum = 0;
-  let cfCum = 0;
-  let gfgCum = 0;
-  const out = [];
-  for (const date of dates) {
-    lcCum += Number(dailyLC[date] || 0);
-    cfCum += Number(dailyCF[date] || 0);
-    gfgCum += gfgFlatPerDay;
-    out.push({
-      date,
-      leetcode: lcCum,
-      codeforces: cfCum,
-      gfg: Math.round(gfgCum),
+  const seriesFor = (allDays, totalSolved) => {
+    const out = Object.fromEntries(dates.map((d) => [d, 0]));
+    if (!Array.isArray(allDays) || !allDays.length || !Number.isFinite(totalSolved) || totalSolved <= 0) {
+      return dates.map((date) => ({ date, value: 0 }));
+    }
+    let allTimeSum = 0;
+    let windowSum = 0;
+    for (const d of allDays) {
+      const c = Number(d.count || 0);
+      if (!c) continue;
+      allTimeSum += c;
+      if (d.date in out) {
+        out[d.date] += c;
+        windowSum += c;
+      }
+    }
+    if (windowSum <= 0) {
+      return dates.map((date) => ({ date, value: 0 }));
+    }
+    // Fraction of all-time submissions that fall inside our window.
+    const windowFrac = allTimeSum > 0 ? windowSum / allTimeSum : 1;
+    // Anchored end value — cap at totalSolved so we never exceed reality.
+    const targetEnd = Math.min(totalSolved, Math.round(totalSolved * windowFrac));
+    // Scale daily counts so cumulative ends exactly at targetEnd.
+    const scale = targetEnd / windowSum;
+    let cum = 0;
+    return dates.map((date) => {
+      cum += Number(out[date] || 0) * scale;
+      return { date, value: Math.round(cum) };
     });
-  }
-  return out;
+  };
+
+  const lcSolved = Number(stats?.leetcode?.solved?.total || 0);
+  const cfSolved = Number(stats?.codeforces?.uniqueSolved || 0);
+  const gfgSolved = Number(stats?.gfg?.problemsSolved || 0);
+
+  const lcSeries = seriesFor(stats?.leetcode?.dailySubmissions, lcSolved);
+  const cfSeries = seriesFor(stats?.codeforces?.dailySubmissions, cfSolved);
+
+  // GFG has no daily endpoint; smear current total flat across the window so
+  // the line gently rises rather than stair-stepping at the end.
+  const gfgPerDay = gfgSolved && dates.length > 0 ? gfgSolved / dates.length : 0;
+  const gfgSeries = dates.map((date, i) => ({ date, value: Math.round(gfgPerDay * (i + 1)) }));
+
+  return dates.map((date, i) => ({
+    date,
+    leetcode: lcSeries[i].value,
+    codeforces: cfSeries[i].value,
+    gfg: gfgSeries[i].value,
+  }));
 }
 
 /**

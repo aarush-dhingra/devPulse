@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import EmptyState from "../ui/EmptyState";
 
 const CELL = 12;
 const GAP = 3;
 const RADIUS = 3;
 
-// Violet → cyan ramp.
 const RAMP = [
   "rgba(255,255,255,0.04)",
   "rgba(139, 92, 246, 0.28)",
@@ -23,29 +22,27 @@ function bucketFor(count, p95) {
   return 4;
 }
 
-const PLATFORM_LABEL = {
-  github: "GitHub",
-  leetcode: "LeetCode",
-  codeforces: "Codeforces",
-  wakatime: "Wakatime",
+const PLATFORM_META = {
+  github: { label: "GitHub", icon: "🐙", color: "#a78bfa", unit: "contributions" },
+  leetcode: { label: "LeetCode", icon: "🧩", color: "#ffa116", unit: "submissions" },
+  codeforces: { label: "Codeforces", icon: "⚔️", color: "#fe646f", unit: "submissions" },
+  wakatime: { label: "Wakatime", icon: "⏱️", color: "#22d3ee", unit: "hours" },
 };
 
-function fmtBreakdown(b = {}) {
-  const parts = [];
-  if (b.github) parts.push(`${b.github} GitHub`);
-  if (b.leetcode) parts.push(`${b.leetcode} LeetCode`);
-  if (b.codeforces) parts.push(`${b.codeforces} CF`);
-  if (b.wakatime)
-    parts.push(`${Number(b.wakatime).toFixed(1)}h Wakatime`);
-  return parts.join(" · ") || "no activity";
+function fmtPlatformValue(key, val) {
+  if (key === "wakatime") return `${Number(val).toFixed(1)} h`;
+  return `${Math.round(Number(val))} ${val === 1 ? PLATFORM_META[key].unit.replace(/s$/, "") : PLATFORM_META[key].unit}`;
 }
 
-export default function CombinedHeatmap({ data }) {
-  const [hovered, setHovered] = useState(null);
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const { weeks, p95, total, totalActiveDays, bestDay, streakLongest, perPlatform } = useMemo(() => {
+export default function CombinedHeatmap({ data }) {
+  const [hover, setHover] = useState(null); // { cell, x, y } in container coords
+  const containerRef = useRef(null);
+
+  const view = useMemo(() => {
     if (!data?.heatmap?.length) {
-      return { weeks: [], p95: 1, total: 0, totalActiveDays: 0, bestDay: null, streakLongest: 0, perPlatform: {} };
+      return { weeks: [], p95: 1, monthLabels: [] };
     }
     const cells = data.heatmap;
     const out = [];
@@ -54,46 +51,30 @@ export default function CombinedHeatmap({ data }) {
     for (let i = 0; i < firstDay; i += 1) week.push(null);
     for (const d of cells) {
       week.push(d);
-      if (week.length === 7) {
-        out.push(week);
-        week = [];
-      }
+      if (week.length === 7) { out.push(week); week = []; }
     }
     if (week.length) {
       while (week.length < 7) week.push(null);
       out.push(week);
     }
-
     const positives = cells.map((c) => c.count).filter((c) => c > 0).sort((a, b) => a - b);
     const p95 = positives.length
       ? positives[Math.floor(positives.length * 0.95)] || positives[positives.length - 1]
       : 1;
 
-    return {
-      weeks: out,
-      p95,
-      total: data.total,
-      totalActiveDays: data.totalActiveDays,
-      bestDay: data.bestDay,
-      streakLongest: data.streakLongest,
-      perPlatform: data.perPlatform || {},
-    };
-  }, [data]);
-
-  const monthLabels = useMemo(() => {
-    const out = [];
+    const monthLabels = [];
     let lastMonth = -1;
-    weeks.forEach((w, wi) => {
+    out.forEach((w, wi) => {
       const firstReal = w.find(Boolean);
       if (!firstReal) return;
       const m = new Date(firstReal.date + "T00:00:00Z").getUTCMonth();
       if (m !== lastMonth) {
-        out.push({ x: wi * (CELL + GAP), label: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m] });
+        monthLabels.push({ x: wi * (CELL + GAP), label: MONTHS[m] });
         lastMonth = m;
       }
     });
-    return out;
-  }, [weeks]);
+    return { weeks: out, p95, monthLabels };
+  }, [data]);
 
   if (!data?.heatmap?.length) {
     return (
@@ -108,12 +89,33 @@ export default function CombinedHeatmap({ data }) {
     );
   }
 
+  const handleEnter = (cell) => (e) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setHover({
+      cell,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
+  const handleMove = (e) => {
+    setHover((h) => {
+      if (!h) return h;
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return h;
+      return { ...h, x: e.clientX - rect.left, y: e.clientY - rect.top };
+    });
+  };
+  const handleLeave = () => setHover(null);
+
   return (
-    <div className="panel-pad relative">
+    <div className="panel-pad relative" ref={containerRef}>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h3 className="font-display font-bold text-lg">Combined Activity</h3>
-          <span className="pill-accent">{Math.round(total).toLocaleString()} units · last year</span>
+          <span className="pill-accent">
+            {Math.round(data.total).toLocaleString()} units · last year
+          </span>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-ink-faint">
           Less
@@ -124,41 +126,33 @@ export default function CombinedHeatmap({ data }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto -mx-1 px-1 pb-2">
+      <div className="overflow-x-auto -mx-1 px-1 pb-2" onMouseLeave={handleLeave}>
         <svg
-          width={(CELL + GAP) * weeks.length + 28}
+          width={(CELL + GAP) * view.weeks.length + 28}
           height={(CELL + GAP) * 7 + 18}
-          className="block"
+          className="block select-none"
+          onMouseMove={handleMove}
         >
           <g transform="translate(28,16)">
-            {monthLabels.map((m, i) => (
+            {view.monthLabels.map((m, i) => (
               <text
-                key={i}
-                x={m.x}
-                y={-6}
-                fill="rgba(148,163,184,0.65)"
-                fontSize="10"
+                key={i} x={m.x} y={-6}
+                fill="rgba(148,163,184,0.65)" fontSize="10"
                 fontFamily="Space Grotesk, ui-sans-serif"
-              >
-                {m.label}
-              </text>
+              >{m.label}</text>
             ))}
             {["Mon", "Wed", "Fri"].map((d, idx) => (
               <text
-                key={d}
-                x={-26}
-                y={idx * 2 * (CELL + GAP) + 9}
-                fill="rgba(148,163,184,0.55)"
-                fontSize="10"
+                key={d} x={-26} y={idx * 2 * (CELL + GAP) + 9}
+                fill="rgba(148,163,184,0.55)" fontSize="10"
                 fontFamily="Space Grotesk, ui-sans-serif"
-              >
-                {d}
-              </text>
+              >{d}</text>
             ))}
-            {weeks.map((w, wi) =>
+            {view.weeks.map((w, wi) =>
               w.map((d, di) => {
                 if (!d) return null;
-                const fill = RAMP[bucketFor(d.count, p95)];
+                const fill = RAMP[bucketFor(d.count, view.p95)];
+                const isHovered = hover?.cell?.date === d.date;
                 return (
                   <rect
                     key={`${wi}-${di}`}
@@ -168,12 +162,11 @@ export default function CombinedHeatmap({ data }) {
                     height={CELL}
                     rx={RADIUS}
                     fill={fill}
-                    onMouseEnter={() => setHovered(d)}
-                    onMouseLeave={() => setHovered((h) => (h === d ? null : h))}
-                    style={{ cursor: "pointer", transition: "filter 120ms" }}
-                  >
-                    <title>{`${d.date}\n${fmtBreakdown(d.breakdown)}`}</title>
-                  </rect>
+                    stroke={isHovered ? "#22d3ee" : "transparent"}
+                    strokeWidth={isHovered ? 1.5 : 0}
+                    onMouseEnter={handleEnter(d)}
+                    style={{ cursor: "pointer" }}
+                  />
                 );
               })
             )}
@@ -181,44 +174,94 @@ export default function CombinedHeatmap({ data }) {
         </svg>
       </div>
 
-      {hovered && (
-        <div className="mt-2 text-xs text-ink-muted">
-          <span className="font-semibold text-ink">
-            {new Date(hovered.date + "T00:00:00Z").toLocaleDateString(undefined, {
-              weekday: "short", month: "short", day: "numeric",
-            })}
-          </span>
-          {" — "}
-          {fmtBreakdown(hovered.breakdown)}
-        </div>
-      )}
+      {hover?.cell && <FloatingTip hover={hover} />}
 
       <div className="mt-4 grid grid-cols-3 gap-3">
         <Stat
           label="Best day"
-          value={bestDay ? Math.round(bestDay.count).toString() : "—"}
-          sub={bestDay ? new Date(bestDay.date + "T00:00:00Z").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}
+          value={data.bestDay ? Math.round(data.bestDay.count).toString() : "—"}
+          sub={
+            data.bestDay
+              ? new Date(data.bestDay.date + "T00:00:00Z").toLocaleDateString(undefined, {
+                  month: "short", day: "numeric",
+                })
+              : ""
+          }
         />
-        <Stat label="Longest streak" value={`${streakLongest}d`} />
+        <Stat label="Longest streak" value={`${data.streakLongest}d`} />
         <Stat
           label="Active days"
-          value={`${totalActiveDays}`}
-          sub={`${Math.round((totalActiveDays / 365) * 100)}% of year`}
+          value={`${data.totalActiveDays}`}
+          sub={`${Math.round((data.totalActiveDays / 365) * 100)}% of year`}
         />
       </div>
 
-      {Object.values(perPlatform).some((v) => v > 0) && (
+      {data.perPlatform && Object.values(data.perPlatform).some((v) => v > 0) && (
         <div className="mt-3 text-[11px] text-ink-faint flex flex-wrap gap-x-4 gap-y-1">
-          {Object.entries(perPlatform)
+          {Object.entries(data.perPlatform)
             .filter(([, v]) => v > 0)
             .map(([k, v]) => (
-              <span key={k}>
-                <span className="text-ink-muted">{PLATFORM_LABEL[k] || k}:</span>{" "}
-                <span className="text-ink tabular-nums">{Math.round(Number(v))}</span>
+              <span key={k} className="flex items-center gap-1">
+                <span className="text-ink-muted">
+                  {PLATFORM_META[k]?.icon} {PLATFORM_META[k]?.label || k}:
+                </span>{" "}
+                <span className="text-ink tabular-nums">
+                  {k === "wakatime" ? `${Number(v).toFixed(1)}h` : Math.round(Number(v))}
+                </span>
               </span>
             ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function FloatingTip({ hover }) {
+  const { cell, x, y } = hover;
+  const breakdown = cell.breakdown || {};
+  const active = Object.entries(breakdown).filter(([, v]) => Number(v) > 0);
+  const date = new Date(cell.date + "T00:00:00Z").toLocaleDateString(undefined, {
+    weekday: "short", month: "short", day: "numeric", year: "numeric",
+  });
+  const tipW = 220;
+  // Clamp horizontal position so the tip doesn't overflow.
+  const left = Math.max(8, Math.min(x + 14, (typeof window !== "undefined" ? window.innerWidth : 9999) - tipW - 16));
+  return (
+    <div
+      className="pointer-events-none absolute z-30"
+      style={{ left, top: y + 18, width: tipW }}
+    >
+      <div
+        className="rounded-lg border border-line/80 bg-bg/95 backdrop-blur-md px-3 py-2 shadow-deep"
+        style={{ boxShadow: "0 8px 28px -10px rgba(124,58,237,0.45)" }}
+      >
+        <div className="text-[11px] uppercase tracking-wider text-ink-dim mb-1.5">
+          {date}
+        </div>
+        {active.length === 0 ? (
+          <div className="text-xs text-ink-muted">No activity</div>
+        ) : (
+          <ul className="space-y-1">
+            {active.map(([k, v]) => {
+              const meta = PLATFORM_META[k] || { label: k, icon: "·", color: "#A78BFA" };
+              return (
+                <li key={k} className="flex items-center gap-2 text-sm text-ink">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
+                    style={{ background: meta.color, boxShadow: `0 0 8px ${meta.color}` }}
+                  />
+                  <span className="text-ink-muted flex-1">
+                    {meta.icon} {meta.label}
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {fmtPlatformValue(k, v)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

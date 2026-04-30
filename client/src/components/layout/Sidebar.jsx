@@ -113,6 +113,9 @@ export default function Sidebar() {
               />
             </div>
           </div>
+
+          <SidebarStreak data={data} />
+
           <button
             onClick={logout}
             className="mt-3 w-full text-[11px] uppercase tracking-wider text-ink-faint hover:text-rose-300 transition py-1"
@@ -129,6 +132,87 @@ function PlatformIcon(emoji) {
   return function Icon() {
     return <span className="text-base leading-none">{emoji}</span>;
   };
+}
+
+function SidebarStreak({ data }) {
+  const stats = data?.stats || {};
+  const gh = stats.github || {};
+  const lc = stats.leetcode || {};
+  const cf = stats.codeforces || {};
+  const wt = stats.wakatime || {};
+  const gfg = stats.gfg || {};
+
+  // Build a 7-day map keyed by ISO date (UTC).
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const days = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    const d = new Date(today.getTime() - i * 86400000);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const totals = Object.fromEntries(days.map((d) => [d, 0]));
+  const add = (date, n) => {
+    if (date in totals) totals[date] += Number(n) || 0;
+  };
+  for (const d of gh.contributions?.heatmap || []) add(d.date, d.count);
+  for (const d of lc.dailySubmissions || []) add(d.date, d.count);
+  for (const d of cf.dailySubmissions || []) add(d.date, d.count);
+  for (const d of wt.dailyHours || []) add(d.date, d.hours);
+
+  const dayLetters = ["S", "M", "T", "W", "T", "F", "S"];
+  const todayDow = today.getUTCDay();
+
+  // Streak (combined): use the same formula as combined heatmap but cheaper.
+  const streak = Math.max(
+    Number(gh.contributions?.streakCurrent || 0),
+    Number(gfg.streak || 0)
+  );
+
+  return (
+    <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.03] p-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xl leading-none">🔥</span>
+        <span className="font-display font-bold text-2xl tabular-nums">
+          {streak}
+        </span>
+        <span className="ml-auto text-[10px] uppercase tracking-wider text-ink-faint">
+          Day Streak
+        </span>
+      </div>
+      <div className="mt-2.5 grid grid-cols-7 gap-1.5">
+        {days.map((date, idx) => {
+          const dow = (todayDow - 6 + idx + 7) % 7;
+          const active = totals[date] > 0;
+          return (
+            <div key={date} className="flex flex-col items-center gap-1">
+              <div
+                className={`w-6 h-6 rounded-md grid place-items-center text-[10px] transition ${
+                  active
+                    ? "bg-gradient-to-br from-accent-500/40 to-cyan-500/30 text-ink ring-1 ring-accent-500/40"
+                    : "bg-white/[0.04] text-ink-faint ring-1 ring-white/5"
+                }`}
+                style={
+                  active
+                    ? { boxShadow: "0 0 10px rgba(167,139,250,0.4)" }
+                    : undefined
+                }
+                title={`${date}${active ? "" : " — no activity"}`}
+              >
+                {active ? "✓" : ""}
+              </div>
+              <span
+                className={`text-[9px] uppercase ${
+                  idx === 6 ? "text-accent-300 font-bold" : "text-ink-faint"
+                }`}
+              >
+                {dayLetters[dow]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function GridIcon() {
