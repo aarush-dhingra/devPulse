@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  background-image:
+    radial-gradient(1100px 700px at 0% -5%, rgba(139, 92, 246, 0.16), transparent 60%),
+    radial-gradient(900px 600px at 120% 10%, rgba(34, 211, 238, 0.10), transparent 65%),
+    radial-gradient(800px 500px at 50% 110%, rgba(139, 92, 246, 0.10), transparent 65%);
+  background-attachment: fixed;
+}
+
+/* Subtle global grid backdrop */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
+}
+
+#root { position: relative; z-index: 1; }
+
+@layer components {
+  .panel {
+    @apply bg-bg-card/80 backdrop-blur-xl rounded-2xl border border-white/[0.06]
+           shadow-deep relative overflow-hidden;
+  }
+  .panel::before {
+    content: "";
+    @apply absolute inset-0 pointer-events-none rounded-2xl;
+    background: linear-gradient(
+      180deg,
+      rgba(139, 92, 246, 0.05) 0%,
+      transparent 40%
+    );
+  }
+  .panel-pad { @apply panel p-5; }
+
+  .card {
+    @apply panel-pad transition-all duration-200;
+  }
+  .card-hover {
+    @apply hover:border-accent-500/40
+           hover:shadow-glow hover:-translate-y-0.5;
+  }
+
+  /* Pill / chip */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1
+           text-[11px] font-semibold uppercase tracking-wider
+           border border-white/10 bg-white/[0.04] text-ink-muted;
+  }
+  .pill-accent {
+    @apply pill border-accent-500/40 bg-accent-500/10 text-accent-300;
+  }
+  .pill-good {
+    @apply pill border-good/40 bg-good/10 text-emerald-300;
+  }
+  .pill-warn {
+    @apply pill border-warn/40 bg-warn/10 text-amber-300;
+  }
+  .pill-bad {
+    @apply pill border-bad/40 bg-bad/10 text-rose-300;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
+           text-sm font-semibold transition select-none
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn text-white shadow-glow;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.10), transparent 60%),
+      linear-gradient(135deg, #8b5cf6, #6d28d9);
+  }
+  .btn-primary:hover {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.16), transparent 60%),
+      linear-gradient(135deg, #9067ff, #7c3aed);
+  }
+  .btn-cyan {
+    @apply btn text-bg-deep shadow-glow-cyan font-bold;
+    background: linear-gradient(135deg, #22d3ee, #06b6d4);
+  }
+  .btn-ghost {
+    @apply btn bg-white/[0.04] text-ink hover:bg-white/[0.08]
+           border border-white/10;
+  }
+  .btn-outline {
+    @apply btn border border-white/15 text-ink hover:bg-white/[0.04]
+           hover:border-accent-500/40 hover:text-accent-200;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2.5
+           text-sm text-ink placeholder:text-ink-faint
+           focus:outline-none focus:ring-2 focus:ring-accent-500/40
+           focus:border-accent-500/40 transition;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-clip-text text-transparent
+           bg-gradient-to-r from-accent-300 via-accent-400 to-cyan-400;
+  }
+  .gradient-text-soft {
+    @apply bg-clip-text text-transparent
+           bg-gradient-to-br from-ink to-ink-muted;
+  }
+
+  /* Holographic / scanline border */
+  .holo-border {
+    position: relative;
+  }
+  .holo-border::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg,
+      rgba(139, 92, 246, 0.5),
+      rgba(34, 211, 238, 0.4) 50%,
+      rgba(139, 92, 246, 0.5));
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Stat number style */
+  .stat-num {
+    @apply font-display font-extrabold tracking-tight tabular-nums;
+  }
+
+  /* Subtle divider */
+  .hr-soft { @apply border-t border-white/5; }
+}
+
+@layer utilities {
+  .glow-violet { box-shadow: 0 0 24px rgba(139, 92, 246, 0.45); }
+  .glow-cyan   { box-shadow: 0 0 24px rgba(34, 211, 238, 0.4); }
+  .text-shadow-soft { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+}
+
+/* Holographic shimmer on hover for any .panel (skipped on .holo-border which
+   already owns the ::after pseudo for its border ring). */
+.panel { position: relative; }
+.panel:not(.holo-border)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(167, 139, 250, 0.10) 50%,
+    rgba(34, 211, 238, 0.08) 60%,
+    transparent 70%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  background-position: 200% 0;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.panel:not(.holo-border):hover::after {
+  opacity: 1;
+  animation: holo-sweep 1.6s ease-out;
+}
+@keyframes holo-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Slow infinite spin used by DevScore inner ring */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Stagger fade-in: each direct child of .stagger-fade animates with a cascade */
+.stagger-fade > * {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: stagger-in 380ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.stagger-fade > *:nth-child(1) { animation-delay: 40ms; }
+.stagger-fade > *:nth-child(2) { animation-delay: 100ms; }
+.stagger-fade > *:nth-child(3) { animation-delay: 160ms; }
+.stagger-fade > *:nth-child(4) { animation-delay: 220ms; }
+.stagger-fade > *:nth-child(5) { animation-delay: 280ms; }
+.stagger-fade > *:nth-child(6) { animation-delay: 340ms; }
+.stagger-fade > *:nth-child(n+7) { animation-delay: 400ms; }
+@keyframes stagger-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Per-route fade entrance */
+.route-fade-in {
+  animation: route-fade 280ms ease-out;
+}
+@keyframes route-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.18);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.32); background-clip: padding-box; }
