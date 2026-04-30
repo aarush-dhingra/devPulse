@@ -151,28 +151,32 @@ async function buildHeatmap(userId) {
 }
 
 /**
- * Multi-line problems-solved series (cumulative) by day.
+ * Daily (NOT cumulative) problems-solved series, broken down per platform.
+ * Each row is `{ date, leetcode, codeforces, gfg }` representing the number
+ * of problems solved that calendar day.
  *
- * The submission-calendar APIs return daily *submission* counts (not unique
- * problems), so naively cumulating them can wildly exceed the user's actual
- * solved count. We use a two-pass approach:
+ * Submission-calendar APIs return daily *submission* counts (multiple
+ * submissions per problem are possible). To produce a "problems solved"
+ * approximation we scale each platform's daily counts so the in-window sum
+ * equals the platform's window-share of its lifetime solved total. The
+ * result honours the relative shape of the user's activity but never
+ * over-counts beyond what they've actually solved.
  *
- * 1. Build raw per-day submission counts inside the window.
- * 2. Compute each platform's contribution INSIDE the window as a fraction of
- *    its total submissions ever (window_sum / all_time_sum), then multiply
- *    that fraction by the platform's known total problems solved. This gives
- *    an anchored end-value (cumulative-at-end ≤ total problems solved).
- * 3. Finally scale each day proportionally so the cumulative line ends at the
- *    anchored value.
+ * For ranges > 90 days we bucket weekly so the chart stays readable.
  */
 async function buildProblemsSeries(userId, days = 90) {
   const stats = await statsModel.getLatestForUser(userId);
   const dates = windowDates(days);
 
-  const seriesFor = (allDays, totalSolved) => {
+  const dailyFor = (allDays, totalSolved) => {
     const out = Object.fromEntries(dates.map((d) => [d, 0]));
-    if (!Array.isArray(allDays) || !allDays.length || !Number.isFinite(totalSolved) || totalSolved <= 0) {
-      return dates.map((date) => ({ date, value: 0 }));
+    if (
+      !Array.isArray(allDays) ||
+      !allDays.length ||
+      !Number.isFinite(totalSolved) ||
+      totalSolved <= 0
+    ) {
+      return out;
     }
     let allTimeSum = 0;
     let windowSum = 0;
@@ -185,40 +189,83 @@ async function buildProblemsSeries(userId, days = 90) {
         windowSum += c;
       }
     }
-    if (windowSum <= 0) {
-      return dates.map((date) => ({ date, value: 0 }));
-    }
-    // Fraction of all-time submissions that fall inside our window.
+    if (windowSum <= 0) return out;
     const windowFrac = allTimeSum > 0 ? windowSum / allTimeSum : 1;
-    // Anchored end value — cap at totalSolved so we never exceed reality.
-    const targetEnd = Math.min(totalSolved, Math.round(totalSolved * windowFrac));
-    // Scale daily counts so cumulative ends exactly at targetEnd.
-    const scale = targetEnd / windowSum;
-    let cum = 0;
-    return dates.map((date) => {
-      cum += Number(out[date] || 0) * scale;
-      return { date, value: Math.round(cum) };
-    });
+    const target = Math.min(totalSolved, Math.round(totalSolved * windowFrac));
+    if (target <= 0) {
+      for (const k of Object.keys(out)) out[k] = 0;
+      return out;
+    }
+    const scale = target / windowSum;
+    // Distribute as fractional values, then round so the rounded sum is
+    // close to target (largest-remainder method).
+    const scaled = {};
+    let runningInt = 0;
+    const remainders = [];
+    for (const date of dates) {
+      const v = (out[date] || 0) * scale;
+      const floor = Math.floor(v);
+      scaled[date] = floor;
+      runningInt += floor;
+      remainders.push({ date, frac: v - floor });
+    }
+    let leftover = target - runningInt;
+    remainders.sort((a, b) => b.frac - a.frac);
+    for (const r of remainders) {
+      if (leftover <= 0) break;
+      scaled[r.date] += 1;
+      leftover -= 1;
+    }
+    return scaled;
   };
 
   const lcSolved = Number(stats?.leetcode?.solved?.total || 0);
   const cfSolved = Number(stats?.codeforces?.uniqueSolved || 0);
   const gfgSolved = Number(stats?.gfg?.problemsSolved || 0);
 
-  const lcSeries = seriesFor(stats?.leetcode?.dailySubmissions, lcSolved);
-  const cfSeries = seriesFor(stats?.codeforces?.dailySubmissions, cfSolved);
+  const lcDaily = dailyFor(stats?.leetcode?.dailySubmissions, lcSolved);
+  const cfDaily = dailyFor(stats?.codeforces?.dailySubmissions, cfSolved);
 
-  // GFG has no daily endpoint; smear current total flat across the window so
-  // the line gently rises rather than stair-stepping at the end.
-  const gfgPerDay = gfgSolved && dates.length > 0 ? gfgSolved / dates.length : 0;
-  const gfgSeries = dates.map((date, i) => ({ date, value: Math.round(gfgPerDay * (i + 1)) }));
+  // GFG has no daily endpoint — distribute total evenly so the bars are
+  // visible but don't fake daily granularity.
+  const gfgDaily = Object.fromEntries(dates.map((d) => [d, 0]));
+  if (gfgSolved > 0 && dates.length > 0) {
+    const per = gfgSolved / dates.length;
+    let acc = 0;
+    let placed = 0;
+    for (const d of dates) {
+      acc += per;
+      const whole = Math.floor(acc);
+      const inc = whole - placed;
+      gfgDaily[d] = inc;
+      placed = whole;
+    }
+  }
 
-  return dates.map((date, i) => ({
+  const daily = dates.map((date) => ({
     date,
-    leetcode: lcSeries[i].value,
-    codeforces: cfSeries[i].value,
-    gfg: gfgSeries[i].value,
+    leetcode: Number(lcDaily[date] || 0),
+    codeforces: Number(cfDaily[date] || 0),
+    gfg: Number(gfgDaily[date] || 0),
   }));
+
+  // Bucket weekly for long ranges so the chart isn't a wall of bars.
+  if (days > 90) {
+    const weekMap = {};
+    for (const d of daily) {
+      const dt = new Date(d.date + "T00:00:00Z");
+      const dow = dt.getUTCDay();
+      const monday = new Date(dt.getTime() - ((dow + 6) % 7) * DAY_MS);
+      const wk = dateKey(monday);
+      if (!weekMap[wk]) weekMap[wk] = { date: wk, leetcode: 0, codeforces: 0, gfg: 0 };
+      weekMap[wk].leetcode += d.leetcode;
+      weekMap[wk].codeforces += d.codeforces;
+      weekMap[wk].gfg += d.gfg;
+    }
+    return Object.values(weekMap).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  return daily;
 }
 
 /**

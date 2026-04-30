@@ -174,7 +174,9 @@ export default function CombinedHeatmap({ data }) {
         </svg>
       </div>
 
-      {hover?.cell && <FloatingTip hover={hover} />}
+      {hover?.cell && (
+        <FloatingTip hover={hover} containerRef={containerRef} />
+      )}
 
       <div className="mt-4 grid grid-cols-3 gap-3">
         <Stat
@@ -216,20 +218,34 @@ export default function CombinedHeatmap({ data }) {
   );
 }
 
-function FloatingTip({ hover }) {
+function FloatingTip({ hover, containerRef }) {
   const { cell, x, y } = hover;
   const breakdown = cell.breakdown || {};
   const active = Object.entries(breakdown).filter(([, v]) => Number(v) > 0);
   const date = new Date(cell.date + "T00:00:00Z").toLocaleDateString(undefined, {
     weekday: "short", month: "short", day: "numeric", year: "numeric",
   });
-  const tipW = 220;
-  // Clamp horizontal position so the tip doesn't overflow.
-  const left = Math.max(8, Math.min(x + 14, (typeof window !== "undefined" ? window.innerWidth : 9999) - tipW - 16));
+
+  const tipW = 240;
+  const tipH = Math.max(60, 36 + active.length * 22);
+  const containerW = containerRef.current?.clientWidth ?? 9999;
+  const containerH = containerRef.current?.clientHeight ?? 9999;
+  const PAD = 12;
+
+  // Prefer right-of-cursor; flip to the left if it would overflow.
+  let left = x + 14;
+  if (left + tipW + PAD > containerW) left = x - tipW - 14;
+  left = Math.max(PAD, Math.min(left, containerW - tipW - PAD));
+
+  // Prefer below-cursor; flip up if it would overflow.
+  let top = y + 18;
+  if (top + tipH + PAD > containerH) top = y - tipH - 12;
+  top = Math.max(PAD, top);
+
   return (
     <div
       className="pointer-events-none absolute z-30"
-      style={{ left, top: y + 18, width: tipW }}
+      style={{ left, top, width: tipW }}
     >
       <div
         className="rounded-lg border border-line/80 bg-bg/95 backdrop-blur-md px-3 py-2 shadow-deep"
