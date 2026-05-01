@@ -76,7 +76,15 @@ export default function Goals() {
         <EmptyState
           icon="🎯"
           title="No goals yet"
-          description="Set a target — we'll auto-track your progress from your latest stats."
+          description="Set a target and DevPulse will auto-track your progress from live stats."
+          action={
+            <button
+              onClick={() => document.querySelector('[data-add-goal]')?.click()}
+              className="text-[11px] text-accent-300 hover:underline"
+            >
+              → Add your first goal
+            </button>
+          }
         />
       ) : (
         <ul className="space-y-2.5">

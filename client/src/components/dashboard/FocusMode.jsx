@@ -170,10 +170,41 @@ export default function FocusMode() {
   const C = 2 * Math.PI * R;
   const dashOffset = C * (1 - ratio);
 
+  /* pulse animation class injected via style tag */
+  const glowStyle = running ? {
+    boxShadow: "0 0 0 1px rgba(167,139,250,0.45), 0 0 32px rgba(167,139,250,0.2), 0 0 64px rgba(167,139,250,0.08)",
+    transition: "box-shadow 0.4s ease",
+  } : {
+    boxShadow: "none",
+    transition: "box-shadow 0.4s ease",
+  };
+
   return (
-    <div className="panel-pad">
+    <div
+      id="focus-mode"
+      className="panel-pad rounded-xl relative overflow-hidden"
+      style={glowStyle}
+    >
+      {/* Live indicator strip */}
+      {running && (
+        <div
+          className="absolute top-0 left-0 right-0 h-[2px] rounded-t-xl overflow-hidden"
+          style={{
+            background: `linear-gradient(90deg, transparent, ${accent} 40%, ${accent} 60%, transparent)`,
+            animation: "focus-pulse 2s ease-in-out infinite",
+          }}
+        />
+      )}
       <div className="flex items-center justify-between mb-3 gap-2">
-        <h3 className="font-display font-bold text-lg">Focus Mode</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-display font-bold text-lg">Focus Mode</h3>
+          {running && (
+            <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
+              Live
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-1 rounded-full bg-white/[0.04] p-1 text-[11px]">
             {Object.entries(PHASE_META).map(([k, p]) => (

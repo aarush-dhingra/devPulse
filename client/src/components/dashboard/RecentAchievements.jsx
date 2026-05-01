@@ -174,7 +174,12 @@ export default function RecentAchievements({ badges = [], stats, limit = 8 }) {
         <EmptyState
           icon="🏆"
           title="No badges yet"
-          description="Keep coding — badges and achievements unlock automatically as you hit milestones."
+          description="Keep coding daily — badges unlock as you hit streaks, solve problems, and push commits."
+          action={
+            <a href="/settings" className="text-[11px] text-accent-300 hover:underline">
+              → Connect platforms to start earning badges
+            </a>
+          }
         />
       ) : (
         <>

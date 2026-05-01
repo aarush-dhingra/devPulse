@@ -1,20 +1,26 @@
+/**
+ * CombinedHeatmap — full-width yearly activity heatmap. Aggregates GitHub
+ * contributions, LeetCode/Codeforces submissions, and WakaTime hours into
+ * a single intensity grid. Renders as a responsive SVG that scales to its
+ * container width. Includes month + weekday labels, a Best Day / Longest
+ * Streak / Active Days stats strip, a per-platform legend with totals,
+ * and a floating tooltip with full breakdown on hover.
+ */
 import { useMemo, useRef, useState } from "react";
 import EmptyState from "../ui/EmptyState";
 import PlatformLogo from "../ui/PlatformLogo";
 
-const CELL = 11;
-const GAP = 3;
-const STEP = (CELL + GAP);
-const RADIUS = 2;
-const VISIBLE_WEEKS = 26; // how many columns are shown at once
-const SCROLL_BY = 4;      // weeks per arrow click
+const CELL   = 13;
+const GAP    = 3;
+const STEP   = CELL + GAP;
+const RADIUS = 2.5;
 
 const RAMP = [
   "rgba(255,255,255,0.04)",
-  "rgba(139, 92, 246, 0.28)",
-  "rgba(139, 92, 246, 0.52)",
-  "rgba(139, 92, 246, 0.80)",
-  "rgba(34, 211, 238, 0.95)",
+  "rgba(124, 58, 237, 0.30)",
+  "rgba(139, 92, 246, 0.55)",
+  "rgba(167, 139, 250, 0.85)",
+  "rgba(34, 211, 238, 1)",
 ];
 
 const PLATFORM_META = {
@@ -29,9 +35,9 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 function bucketFor(count, p95) {
   if (!count || count <= 0) return 0;
   const t = Math.min(1, count / Math.max(1, p95));
-  if (t < 0.25) return 1;
-  if (t < 0.55) return 2;
-  if (t < 0.85) return 3;
+  if (t < 0.20) return 1;
+  if (t < 0.50) return 2;
+  if (t < 0.80) return 3;
   return 4;
 }
 
@@ -47,7 +53,7 @@ export default function CombinedHeatmap({ data }) {
   const [hover, setHover] = useState(null);
 
   const view = useMemo(() => {
-    if (!data?.heatmap?.length) return { weeks: [], p95: 1, monthLabels: [] };
+    if (!data?.heatmap?.length) return { weeks: [], p95: 1 };
 
     const cells = data.heatmap;
     const out = [];
@@ -71,18 +77,10 @@ export default function CombinedHeatmap({ data }) {
     return { weeks: out, p95 };
   }, [data]);
 
-  // Start showing the most recent VISIBLE_WEEKS by default
-  const maxOffset = Math.max(0, view.weeks.length - VISIBLE_WEEKS);
-  const [offset, setOffset] = useState(0);
-  // Keep offset pinned to the latest end unless the user has scrolled left
-  const clampedOffset = Math.min(offset === 0 ? maxOffset : offset, maxOffset);
-  const visibleWeeks = view.weeks.slice(clampedOffset, clampedOffset + VISIBLE_WEEKS);
-
-  // Build month labels only for visible window
   const monthLabels = useMemo(() => {
     const labels = [];
     let lastMonth = -1;
-    visibleWeeks.forEach((w, wi) => {
+    view.weeks.forEach((w, wi) => {
       const firstReal = w?.find(Boolean);
       if (!firstReal) return;
       const m = new Date(firstReal.date + "T00:00:00Z").getUTCMonth();
@@ -92,7 +90,7 @@ export default function CombinedHeatmap({ data }) {
       }
     });
     return labels;
-  }, [visibleWeeks]);
+  }, [view.weeks]);
 
   if (!data?.heatmap?.length) {
     return (
@@ -101,17 +99,20 @@ export default function CombinedHeatmap({ data }) {
         <EmptyState
           icon="📅"
           title="No activity yet"
-          description="Connect platforms in Settings — your daily activity will appear here."
+          description="Connect GitHub, WakaTime, or a problem platform to see your coding heatmap."
+          action={
+            <a href="/settings" className="text-[11px] text-accent-300 hover:underline">
+              → Connect platforms to unlock heatmap
+            </a>
+          }
         />
       </div>
     );
   }
 
-  const canLeft  = clampedOffset > 0;
-  const canRight = clampedOffset < maxOffset;
-
-  const svgW = STEP * VISIBLE_WEEKS + 28;
-  const svgH = STEP * 7 + 16;
+  const totalWeeks = view.weeks.length;
+  const svgW = STEP * totalWeeks + 30;
+  const svgH = STEP * 7 + 18;
 
   const handleEnter = (cell) => (e) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -131,74 +132,52 @@ export default function CombinedHeatmap({ data }) {
   return (
     <div className="panel-pad relative" ref={containerRef}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <h3 className="font-display font-bold text-base">Combined Activity</h3>
+          <h3 className="font-display font-bold text-lg">Combined Activity</h3>
           <span className="pill-accent !py-0.5 !text-[10px]">
             {Math.round(data.total).toLocaleString()} units · last year
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-[10px] text-ink-faint">
-            Less
-            {RAMP.map((c, i) => (
-              <span key={i} className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: c }} />
-            ))}
-            More
-          </div>
-          {/* Arrow nav */}
-          <div className="flex items-center gap-1 ml-1">
-            <button
-              onClick={() => setOffset((o) => Math.max(0, Math.min(o === 0 ? maxOffset : o, maxOffset) - SCROLL_BY))}
-              disabled={!canLeft}
-              className="w-6 h-6 grid place-items-center rounded-md border border-white/10
-                         text-ink-muted hover:text-ink hover:border-white/25
-                         disabled:opacity-30 disabled:cursor-not-allowed transition"
-              title="Earlier"
-            >
-              <ChevronLeft />
-            </button>
-            <button
-              onClick={() => setOffset((o) => Math.min(maxOffset, Math.min(o === 0 ? maxOffset : o, maxOffset) + SCROLL_BY))}
-              disabled={!canRight}
-              className="w-6 h-6 grid place-items-center rounded-md border border-white/10
-                         text-ink-muted hover:text-ink hover:border-white/25
-                         disabled:opacity-30 disabled:cursor-not-allowed transition"
-              title="Later"
-            >
-              <ChevronRight />
-            </button>
-          </div>
+        <div className="flex items-center gap-1.5 text-[10px] text-ink-faint">
+          Less
+          {RAMP.map((c, i) => (
+            <span key={i} className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: c }} />
+          ))}
+          More
         </div>
       </div>
 
-      {/* Heatmap SVG — fixed width, no scroll */}
+      {/* Heatmap SVG — scales to full container width */}
       <div className="overflow-hidden" onMouseLeave={handleLeave}>
         <svg
-          width={svgW}
+          viewBox={`0 0 ${svgW} ${svgH}`}
+          width="100%"
           height={svgH}
-          style={{ maxWidth: "100%", display: "block" }}
+          preserveAspectRatio="xMinYMid meet"
+          style={{ display: "block" }}
           onMouseMove={handleMove}
         >
-          <g transform="translate(28,14)">
+          <g transform="translate(28,16)">
             {/* Month labels */}
             {monthLabels.map((m, i) => (
               <text
-                key={i} x={m.x} y={-4}
-                fill="rgba(148,163,184,0.65)" fontSize="9"
+                key={i} x={m.x} y={-5}
+                fill="rgba(148,163,184,0.7)" fontSize="10"
                 fontFamily="Space Grotesk, ui-sans-serif"
+                fontWeight="500"
               >{m.label}</text>
             ))}
             {/* Day labels */}
             {["Mon", "Wed", "Fri"].map((d, idx) => (
               <text
-                key={d} x={-26} y={idx * 2 * STEP + CELL - 1}
+                key={d} x={-26} y={idx * 2 * STEP + CELL - 2}
                 fill="rgba(148,163,184,0.55)" fontSize="9"
                 fontFamily="Space Grotesk, ui-sans-serif"
               >{d}</text>
             ))}
             {/* Cells */}
-            {visibleWeeks.map((w, wi) =>
+            {view.weeks.map((w, wi) =>
               (w || []).map((d, di) => {
                 if (!d) return null;
                 const fill = RAMP[bucketFor(d.count, view.p95)];
@@ -228,7 +207,7 @@ export default function CombinedHeatmap({ data }) {
       {hover?.cell && <FloatingTip hover={hover} containerRef={containerRef} />}
 
       {/* Stats row */}
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-3 gap-3">
         <Stat
           label="Best day"
           value={data.bestDay ? Math.round(data.bestDay.count).toString() : "—"}
@@ -239,29 +218,38 @@ export default function CombinedHeatmap({ data }) {
                 })
               : ""
           }
+          accent="#fbbf24"
         />
-        <Stat label="Longest streak" value={`${data.streakLongest}d`} />
+        <Stat
+          label="Longest streak"
+          value={`${data.streakLongest}d`}
+          accent="#fb923c"
+        />
         <Stat
           label="Active days"
           value={`${data.totalActiveDays}`}
           sub={`${Math.round((data.totalActiveDays / 365) * 100)}% of year`}
+          accent="#22d3ee"
         />
       </div>
 
-      {/* Per-platform footer */}
+      {/* Per-platform legend */}
       {data.perPlatform && Object.values(data.perPlatform).some((v) => v > 0) && (
-        <div className="mt-2 text-[11px] flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mt-3 pt-3 border-t border-white/[0.05] flex flex-wrap gap-x-4 gap-y-1.5">
           {Object.entries(data.perPlatform)
             .filter(([, v]) => v > 0)
-            .map(([k, v]) => (
-              <span key={k} className="flex items-center gap-1">
-                <PlatformLogo platform={k} size={11} color={PLATFORM_META[k]?.color} />
-                <span className="text-ink-muted">{PLATFORM_META[k]?.label || k}:</span>
-                <span className="text-ink tabular-nums">
-                  {k === "wakatime" ? `${Number(v).toFixed(1)}h` : Math.round(Number(v))}
+            .map(([k, v]) => {
+              const meta = PLATFORM_META[k] || { label: k, color: "#A78BFA" };
+              return (
+                <span key={k} className="flex items-center gap-1.5 text-[11px]">
+                  <PlatformLogo platform={k} size={12} color={meta.color} />
+                  <span className="text-ink-muted">{meta.label}:</span>
+                  <span className="text-ink tabular-nums font-medium">
+                    {k === "wakatime" ? `${Number(v).toFixed(1)}h` : Math.round(Number(v)).toLocaleString()}
+                  </span>
                 </span>
-              </span>
-            ))}
+              );
+            })}
         </div>
       )}
     </div>
@@ -318,29 +306,17 @@ function FloatingTip({ hover, containerRef }) {
   );
 }
 
-function Stat({ label, value, sub }) {
+function Stat({ label, value, sub, accent = "#A78BFA" }) {
   return (
-    <div className="rounded-lg bg-white/[0.03] border border-white/5 px-2.5 py-2">
-      <div className="text-[9px] uppercase tracking-wider text-ink-faint">{label}</div>
-      <div className="text-base font-bold font-display">{value}</div>
-      {sub && <div className="text-[10px] text-ink-muted">{sub}</div>}
+    <div
+      className="rounded-xl bg-white/[0.025] border border-white/[0.05] px-4 py-2.5 transition-all hover:bg-white/[0.04]"
+      style={{ borderLeftWidth: 2, borderLeftColor: `${accent}80` }}
+    >
+      <div className="text-[10px] uppercase tracking-wider text-ink-faint">{label}</div>
+      <div className="text-xl font-bold font-display tabular-nums leading-tight" style={{ color: accent }}>
+        {value}
+      </div>
+      {sub && <div className="text-[10px] text-ink-muted mt-0.5">{sub}</div>}
     </div>
-  );
-}
-
-function ChevronLeft() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-function ChevronRight() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m9 18 6-6-6-6" />
-    </svg>
   );
 }

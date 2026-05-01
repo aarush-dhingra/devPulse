@@ -56,7 +56,12 @@ export default function LanguageRadar({
         <EmptyState
           icon="🧪"
           title="No language data"
-          description="Connect GitHub or Wakatime to populate this chart."
+          description="Connect GitHub or WakaTime to see your language breakdown."
+          action={
+            <a href="/settings" className="text-[11px] text-accent-300 hover:underline">
+              → Connect GitHub or WakaTime
+            </a>
+          }
         />
       </div>
     );

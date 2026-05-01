@@ -33,6 +33,7 @@ export default function StatTile({
   progress,
   integer = true,
   hint,
+  platform,  // optional: "github"|"leetcode"|"wakatime"|"codeforces"|"gfg"
 }) {
   const numeric = typeof value === "number" || /^\d+(\.\d+)?$/.test(String(value || ""));
   const animated = useCountUp(numeric ? Number(value) : 0, { integer });
@@ -46,10 +47,17 @@ export default function StatTile({
   const Wrapper = to ? Link : "div";
   const wrapperProps = to ? { to } : {};
 
+  // Platform-specific gradient border accent
+  const borderStyle = platform ? {
+    borderImage: `linear-gradient(135deg, ${accent}55, transparent 70%) 1`,
+    borderWidth: 1,
+  } : {};
+
   return (
     <Wrapper
       {...wrapperProps}
       className="group relative panel rounded-xl p-3 overflow-hidden card-hover block"
+      style={{ borderColor: `${accent}28`, ...borderStyle }}
     >
       <div
         className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-30 group-hover:opacity-50 transition-opacity"

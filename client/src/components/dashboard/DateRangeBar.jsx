@@ -20,22 +20,24 @@ function fmt(d) {
   });
 }
 
-export default function DateRangeBar({ period, onChange, refreshing, onRefresh }) {
+export default function DateRangeBar({ period, onChange, refreshing, onRefresh, compact = false }) {
   const meta = PERIODS.find((p) => p.id === period) || PERIODS[2];
   const end = new Date();
   end.setHours(0, 0, 0, 0);
   const start = new Date(end.getTime() - (meta.days - 1) * 86400000);
 
   return (
-    <div className="panel rounded-xl px-3 py-2 flex items-center gap-2 flex-wrap">
-      <div className="flex items-center gap-2 text-[12px] text-ink-muted">
-        <CalendarIcon />
-        <span className="font-mono tabular-nums">
-          {fmt(start)} <span className="text-ink-faint">—</span> {fmt(end)}
-        </span>
-      </div>
+    <div className={`flex items-center gap-2 flex-wrap ${compact ? "" : "panel rounded-xl px-3 py-2"}`}>
+      {!compact && (
+        <div className="flex items-center gap-2 text-[12px] text-ink-muted">
+          <CalendarIcon />
+          <span className="font-mono tabular-nums">
+            {fmt(start)} <span className="text-ink-faint">—</span> {fmt(end)}
+          </span>
+        </div>
+      )}
 
-      <div className="ml-auto flex items-center gap-1 rounded-full bg-white/[0.04] p-0.5 border border-white/[0.06]">
+      <div className={`${compact ? "" : "ml-auto "}flex items-center gap-1 rounded-full bg-white/[0.04] p-0.5 border border-white/[0.06]`}>
         {PERIODS.map((p) => (
           <button
             key={p.id}
