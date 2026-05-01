@@ -211,10 +211,11 @@ async function buildHeatmap(userId, days = 365) {
   }
   const { current, longest } = computeStreaks(dates, totals);
 
+  const dateSet = new Set(dates);
   const perPlatform = Object.fromEntries(
     Object.entries(sources).map(([k, m]) => [
       k,
-      Object.values(m).reduce((a, b) => a + Number(b || 0), 0),
+      Object.entries(m).reduce((a, [d, v]) => a + (dateSet.has(d) ? Number(v || 0) : 0), 0),
     ])
   );
 
@@ -229,25 +230,30 @@ async function buildHeatmap(userId, days = 365) {
   };
 }
 
-/* ─── buildProblemsSeries (snapshot-delta approach) ───────────────── */
+/* ─── buildProblemsSeries (hybrid: snapshot deltas + calendar fallback) ── */
 
 /**
- * Daily problems-solved series using the snapshot-delta approach.
+ * Daily problems-solved series using a hybrid approach:
  *
- * Instead of interpreting unreliable submission calendars, we compare
- * consecutive stats_snapshots. If snapshot N has `solved.easy = 20` and
- * snapshot N+1 has `solved.easy = 23`, we know exactly 3 easy problems
- * were solved between the two snapshots.
+ * 1. **Snapshot deltas** (primary, accurate): for every day where we have
+ *    two consecutive snapshots, we diff `solved.easy/medium/hard` to get
+ *    exact per-difficulty counts.
  *
- * Each row is `{ date, easy, medium, hard, total }` — real per-difficulty
- * counts with no approximation.
+ * 2. **Calendar fallback** (historical): for days BEFORE the first snapshot,
+ *    we use LeetCode/Codeforces raw `dailySubmissions` calendar data. The
+ *    calendar gives submission counts (not exact problems solved) but it's
+ *    the best signal available for historical data.  We split LC calendar
+ *    counts into easy/medium/hard using the user's lifetime ratio.
  *
- * For ranges > 90 days we bucket weekly so the chart stays readable.
+ * This ensures the chart shows full historical activity while being exact
+ * for recent days where snapshot data exists.
  */
 async function buildProblemsSeries(userId, days = 90) {
+  const stats = await statsModel.getLatestForUser(userId);
   const dates = windowDates(days);
   const emptyRow = () => ({ easy: 0, medium: 0, hard: 0, total: 0 });
 
+  /* ── snapshot deltas (accurate recent data) ── */
   const history = await statsModel.getMultiPlatformHistory(
     userId,
     ["leetcode", "codeforces", "gfg"],
@@ -258,17 +264,55 @@ async function buildProblemsSeries(userId, days = 90) {
   const cfDeltas  = snapshotDeltas(history.codeforces || [], cfExtractor);
   const gfgDeltas = snapshotDeltas(history.gfg        || [], gfgExtractor);
 
+  const deltasDates = new Set([
+    ...Object.keys(lcDeltas),
+    ...Object.keys(cfDeltas),
+    ...Object.keys(gfgDeltas),
+  ]);
+
+  /* ── calendar fallback (historical data before first snapshot) ── */
+  const firstSnapshotDate = findFirstSnapshotDate(history);
+
+  const lcCalendar = {};
+  for (const d of stats?.leetcode?.dailySubmissions || []) {
+    if (d?.date) lcCalendar[d.date] = Number(d.count || 0);
+  }
+  const cfCalendar = {};
+  for (const d of stats?.codeforces?.dailySubmissions || []) {
+    if (d?.date) cfCalendar[d.date] = Number(d.count || 0);
+  }
+
+  const lc = stats?.leetcode?.solved || {};
+  const lcE = Number(lc.easy || 0), lcM = Number(lc.medium || 0), lcH = Number(lc.hard || 0);
+  const lcT = lcE + lcM + lcH;
+  const lcRatio = lcT > 0
+    ? { easy: lcE / lcT, medium: lcM / lcT, hard: lcH / lcT }
+    : { easy: 0.45, medium: 0.45, hard: 0.10 };
+
+  /* ── merge: deltas take priority, calendar fills gaps ── */
   const daily = dates.map((date) => {
-    const lc  = lcDeltas[date]  || {};
-    const cf  = cfDeltas[date]  || {};
-    const gfg = gfgDeltas[date] || {};
+    if (deltasDates.has(date)) {
+      const lc  = lcDeltas[date]  || {};
+      const cf  = cfDeltas[date]  || {};
+      const gfg = gfgDeltas[date] || {};
+      const easy   = Number(lc.easy   || 0) + Number(gfg.total || 0);
+      const medium = Number(lc.medium || 0);
+      const hard   = Number(lc.hard   || 0) + Number(cf.total  || 0);
+      return { date, easy, medium, hard, total: easy + medium + hard };
+    }
 
-    const easy   = Number(lc.easy   || 0) + Number(gfg.total || 0);
-    const medium = Number(lc.medium || 0);
-    const hard   = Number(lc.hard   || 0) + Number(cf.total  || 0);
-    const total  = easy + medium + hard;
+    if (firstSnapshotDate && date >= firstSnapshotDate) {
+      return { date, ...emptyRow() };
+    }
 
-    return { date, easy, medium, hard, total };
+    const lcCount = lcCalendar[date] || 0;
+    const cfCount = cfCalendar[date] || 0;
+    if (lcCount === 0 && cfCount === 0) return { date, ...emptyRow() };
+
+    const easy   = Math.round(lcCount * lcRatio.easy);
+    const medium = Math.round(lcCount * lcRatio.medium);
+    const hard   = Math.max(0, lcCount - easy - medium) + cfCount;
+    return { date, easy, medium, hard, total: easy + medium + hard };
   });
 
   if (days > 90) {
@@ -288,6 +332,17 @@ async function buildProblemsSeries(userId, days = 90) {
   }
 
   return daily;
+}
+
+function findFirstSnapshotDate(history) {
+  let earliest = null;
+  for (const snaps of Object.values(history || {})) {
+    if (Array.isArray(snaps) && snaps.length > 0) {
+      const d = dateKey(new Date(snaps[0].created_at));
+      if (!earliest || d < earliest) earliest = d;
+    }
+  }
+  return earliest;
 }
 
 /* ─── buildCodingTimeSeries ──────────────────────────────────────── */

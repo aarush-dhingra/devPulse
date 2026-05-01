@@ -182,13 +182,9 @@ export default function SessionTimeline({ stats, heatmapData, period = "30d" }) 
       </div>
 
       {/* Bars area */}
-      <div
-        ref={containerRef}
-        className="relative"
-        style={{ paddingBottom: 22 /* room for day labels */ }}
-      >
+      <div ref={containerRef} className="relative">
         {/* Horizontal grid lines */}
-        <div className="absolute inset-0 pointer-events-none" style={{ bottom: 22 }}>
+        <div className="absolute left-0 right-0 pointer-events-none" style={{ top: 0, height: MAX_BAR_H }}>
           {[0.25, 0.5, 0.75, 1].map((f) => (
             <div
               key={f}
@@ -196,7 +192,6 @@ export default function SessionTimeline({ stats, heatmapData, period = "30d" }) 
               style={{ bottom: `${f * MAX_BAR_H}px` }}
             />
           ))}
-          {/* Solid baseline at bottom */}
           <div
             className="absolute left-0 right-0 border-t border-white/[0.15]"
             style={{ bottom: 0 }}
@@ -204,7 +199,7 @@ export default function SessionTimeline({ stats, heatmapData, period = "30d" }) 
         </div>
 
         {/* Day columns */}
-        <div className="flex items-end gap-1.5" style={{ height: MAX_BAR_H + 20 }}>
+        <div className="flex items-end gap-1.5" style={{ minHeight: MAX_BAR_H }}>
           {days.map((day) => {
             const isToday   = day.iso === todayIso;
             const isHovered = day.iso === hoveredIso;
@@ -222,7 +217,7 @@ export default function SessionTimeline({ stats, heatmapData, period = "30d" }) 
             return (
               <div
                 key={day.iso}
-                className="relative flex-1 flex flex-col items-center"
+                className="flex-1 flex flex-col items-center relative"
                 onMouseEnter={(e) => {
                   setHoveredIso(day.iso);
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -239,7 +234,7 @@ export default function SessionTimeline({ stats, heatmapData, period = "30d" }) 
                   />
                 )}
 
-                {/* Stacked bar column — grows upward using flex-col + justify-end */}
+                {/* Stacked bar column — grows upward */}
                 <div
                   className="w-full flex flex-col justify-end rounded-t-sm overflow-hidden cursor-default transition-all duration-150"
                   style={{
@@ -250,13 +245,11 @@ export default function SessionTimeline({ stats, heatmapData, period = "30d" }) 
                   }}
                 >
                   {total === 0 ? (
-                    /* Empty day — thin baseline mark */
                     <div
                       className="w-full self-end"
                       style={{ height: 2, background: "rgba(255,255,255,0.04)" }}
                     />
                   ) : (
-                    /* Segments stack bottom-to-top — first in array = bottom */
                     segs.map(({ key, value }) => {
                       const h     = Math.max(3, Math.round((value / totalSegs) * barH));
                       const color = PLATFORM_META[key].color;
@@ -278,9 +271,9 @@ export default function SessionTimeline({ stats, heatmapData, period = "30d" }) 
                   )}
                 </div>
 
-                {/* Day label — sits below bar */}
+                {/* Day label — below the bar, not overlapping */}
                 <span
-                  className={`absolute bottom-0 text-[9px] font-medium transition-colors ${
+                  className={`mt-1.5 text-[9px] font-medium leading-none transition-colors shrink-0 ${
                     isToday ? "text-accent-300" : isHovered ? "text-ink" : "text-ink-faint"
                   }`}
                 >
