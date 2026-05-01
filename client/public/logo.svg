@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 60" fill="none">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="text-grad" x1="70" y1="10" x2="240" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="50%" stop-color="#e2e8f0"/>
+      <stop offset="100%" stop-color="#67e8f9"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon: rounded square with pulse -->
+  <rect x="2" y="6" width="48" height="48" rx="12" stroke="url(#brand)" stroke-width="3" fill="none"/>
+  <!-- Pulse/heartbeat line through the icon -->
+  <path d="M8 32 L18 32 L22 22 L27 42 L32 28 L35 32 L46 32"
+        stroke="url(#brand)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- "DV" letters subtly visible -->
+  <text x="16" y="38" font-family="Inter,system-ui,sans-serif" font-weight="800" font-size="14" fill="url(#brand)" opacity="0.3">DV</text>
+  <!-- Brand name -->
+  <text x="62" y="28" font-family="Inter,system-ui,sans-serif" font-weight="300" font-size="26" fill="url(#text-grad)">
+    <tspan font-weight="300">Dev</tspan><tspan font-weight="700">Vitals</tspan>
+  </text>
+  <!-- Tagline -->
+  <text x="62" y="46" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="8" fill="#94a3b8" letter-spacing="3">
+    TRACK. ANALYZE. IMPROVE.
+  </text>
+</svg>

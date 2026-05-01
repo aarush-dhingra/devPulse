@@ -40,7 +40,7 @@ export default function Login() {
             </div>
             <h1 className="text-2xl font-display font-bold">Welcome back</h1>
             <p className="text-sm text-ink-muted mt-1">
-              Sign in to your DevPulse
+              Sign in to your DevVitals
             </p>
           </header>
 

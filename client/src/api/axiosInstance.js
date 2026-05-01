@@ -14,7 +14,7 @@ api.interceptors.response.use(
   (err) => {
     if (err.response?.status === 401) {
       // let auth store decide what to do
-      window.dispatchEvent(new CustomEvent("devpulse:unauthorized"));
+      window.dispatchEvent(new CustomEvent("devvitals:unauthorized"));
     }
     return Promise.reject(err);
   }

@@ -13,6 +13,8 @@ const gfgService = require("../services/gfg.service");
 const codeforcesService = require("../services/codeforces.service");
 const wakatimeService = require("../services/wakatime.service");
 const devtoService = require("../services/devto.service");
+const codechefService = require("../services/codechef.service");
+const atcoderService = require("../services/atcoder.service");
 
 async function preflightFetch(platform, username, apiKey) {
   switch (platform) {
@@ -22,6 +24,10 @@ async function preflightFetch(platform, username, apiKey) {
       return gfgService.fetchAll(username);
     case "codeforces":
       return codeforcesService.fetchAll(username);
+    case "codechef":
+      return codechefService.fetchAll(username);
+    case "atcoder":
+      return atcoderService.fetchAll(username);
     case "devto":
       return devtoService.fetchAll(username);
     case "wakatime":

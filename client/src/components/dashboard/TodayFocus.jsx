@@ -150,12 +150,12 @@ export default function TodayFocus({ user, stats = {} }) {
 
   /**
    * Scroll to the FocusMode panel and ask it to start its timer.
-   * FocusMode listens for the custom "devpulse:focus:start" event.
+   * FocusMode listens for the custom "devvitals:focus:start" event.
    */
   const startFocus = () => {
     const node = document.getElementById("focus-mode");
     if (node) node.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.dispatchEvent(new CustomEvent("devpulse:focus:start"));
+    window.dispatchEvent(new CustomEvent("devvitals:focus:start"));
   };
 
   return (

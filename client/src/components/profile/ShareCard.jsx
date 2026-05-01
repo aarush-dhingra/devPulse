@@ -14,7 +14,7 @@ export default function ShareCard({ username }) {
       const blob = new Blob([svg], { type: "image/svg+xml" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `devpulse-${username}.svg`;
+      a.download = `devvitals-${username}.svg`;
       a.click();
       URL.revokeObjectURL(a.href);
     } finally {

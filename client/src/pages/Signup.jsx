@@ -54,7 +54,7 @@ export default function Signup() {
             <div className="inline-grid place-items-center w-14 h-14 rounded-2xl bg-gradient-to-br from-accent-500 to-cyan-500 mx-auto mb-3 glow-violet">
               <span className="text-white text-xl font-black">⚡</span>
             </div>
-            <h1 className="text-2xl font-display font-bold">Join DevPulse</h1>
+            <h1 className="text-2xl font-display font-bold">Join DevVitals</h1>
             <p className="text-sm text-ink-muted mt-1">
               Build your unified dev profile in seconds
             </p>

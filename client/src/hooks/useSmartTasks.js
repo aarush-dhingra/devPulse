@@ -18,7 +18,7 @@
  */
 import { useCallback, useMemo, useState } from "react";
 
-const STORAGE_KEY = "devpulse:smart-tasks:v3";
+const STORAGE_KEY = "devvitals:smart-tasks:v3";
 
 /* ─── helpers ────────────────────────────────────────────────── */
 

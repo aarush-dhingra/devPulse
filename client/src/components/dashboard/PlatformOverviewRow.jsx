@@ -88,6 +88,28 @@ function buildCard(platform, data, connected) {
         delta:        deltaPct(spark),
       };
     }
+    case "codechef": {
+      const spark = (data.contests || []).slice(-12).map((c) => c.rating || 0);
+      return {
+        ...base,
+        primaryLabel: "Solved",
+        primaryValue: formatNumber(data.problemsSolved ?? 0),
+        secondary:    data.rating ? `Rating ${formatNumber(data.rating)} (${data.stars || 0}★)` : null,
+        spark,
+        delta:        deltaPct(spark),
+      };
+    }
+    case "atcoder": {
+      const spark = (data.ratingHistory || []).slice(-12).map((r) => r.newRating || 0);
+      return {
+        ...base,
+        primaryLabel: "Solved",
+        primaryValue: formatNumber(data.uniqueSolved ?? data.acCount ?? 0),
+        secondary:    data.rating ? `Rating ${formatNumber(data.rating)}` : null,
+        spark,
+        delta:        deltaPct(spark),
+      };
+    }
     case "devto": {
       return {
         ...base,

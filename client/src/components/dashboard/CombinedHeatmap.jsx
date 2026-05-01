@@ -28,6 +28,8 @@ const PLATFORM_META = {
   leetcode:   { id: "leetcode",   label: "LeetCode",      color: "#ffa116", unit: "submissions"   },
   codeforces: { id: "codeforces", label: "Codeforces",    color: "#fe646f", unit: "submissions"   },
   gfg:        { id: "gfg",        label: "GeeksForGeeks", color: "#2f8d46", unit: "problems"      },
+  codechef:   { id: "codechef",   label: "CodeChef",      color: "#5b4638", unit: "problems"      },
+  atcoder:    { id: "atcoder",    label: "AtCoder",       color: "#b0c4de", unit: "problems"      },
   wakatime:   { id: "wakatime",   label: "Wakatime",      color: "#22d3ee", unit: "hours"         },
 };
 

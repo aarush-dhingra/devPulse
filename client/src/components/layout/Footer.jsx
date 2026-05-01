@@ -8,7 +8,7 @@ export default function Footer() {
           <span className="grid place-items-center w-5 h-5 rounded-md bg-gradient-to-br from-accent-500 to-cyan-500">
             <span className="text-white font-black text-[10px]">⚡</span>
           </span>
-          © {new Date().getFullYear()} DevPulse · Built with caffeine for builders
+          © {new Date().getFullYear()} DevVitals · Built with caffeine for builders
         </p>
         <div className="flex items-center gap-4">
           <Link className="hover:text-accent-300 transition" to="/leaderboard">Leaderboard</Link>

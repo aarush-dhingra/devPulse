@@ -185,7 +185,7 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
           <div className="text-3xl opacity-40">📈</div>
           <p className="text-sm font-medium text-ink-muted">No problem-solving data yet</p>
           <p className="text-[11px] text-ink-faint max-w-[220px]">
-            Solve problems on <strong>LeetCode</strong>, <strong>Codeforces</strong>, or <strong>GFG</strong> then hit Refresh to see your progress
+            Solve problems on <strong>LeetCode</strong>, <strong>Codeforces</strong>, <strong>CodeChef</strong>, <strong>AtCoder</strong>, or <strong>GFG</strong> then hit Refresh to see your progress
           </p>
           <Link to="/settings" className="text-[11px] text-accent-300 hover:underline">
             → Connect platforms

@@ -42,12 +42,12 @@ export default function Landing() {
           ⚡ Beta · v0.1 · join the early devs
         </span>
         <h1 className="font-display text-5xl sm:text-7xl font-extrabold tracking-tight leading-[1.05]">
-          Your <span className="gradient-text">dev life</span>,
+          Your <span className="gradient-text">dev vitals</span>,
           <br />
-          all in <span className="gradient-text">one pulse</span>.
+          all in <span className="gradient-text">one place</span>.
         </h1>
         <p className="mt-6 text-lg text-ink-muted max-w-2xl mx-auto">
-          DevPulse aggregates everywhere you ship code and turns it into a
+          DevVitals aggregates everywhere you ship code and turns it into a
           gorgeous, shareable analytics dashboard.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">

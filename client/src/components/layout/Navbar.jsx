@@ -10,11 +10,14 @@ export default function Navbar() {
     <header className="sticky top-0 z-30 backdrop-blur-xl bg-bg/70 border-b border-white/[0.05]">
       <nav className="max-w-7xl mx-auto px-4 lg:px-6 h-14 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
-          <span className="grid place-items-center w-8 h-8 rounded-xl bg-gradient-to-br from-accent-500 to-cyan-500 glow-violet">
-            <span className="text-white font-black text-sm">⚡</span>
+          <span className="grid place-items-center w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 glow-violet">
+            <svg viewBox="0 0 32 32" width="20" height="20" fill="none">
+              <path d="M4 17 L10 17 L13 10 L16 24 L19 14 L21 17 L28 17"
+                    stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </span>
           <span className="font-display font-bold text-lg tracking-tight gradient-text">
-            DevPulse
+            DevVitals
           </span>
         </Link>
 

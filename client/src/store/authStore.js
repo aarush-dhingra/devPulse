@@ -32,7 +32,7 @@ export const useAuthStore = create((set, get) => ({
 }));
 
 if (typeof window !== "undefined") {
-  window.addEventListener("devpulse:unauthorized", () => {
+  window.addEventListener("devvitals:unauthorized", () => {
     useAuthStore.setState({ user: null });
   });
 }

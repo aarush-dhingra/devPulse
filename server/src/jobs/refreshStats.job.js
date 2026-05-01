@@ -17,10 +17,11 @@ const gfgService = require("../services/gfg.service");
 const codeforcesService = require("../services/codeforces.service");
 const wakatimeService = require("../services/wakatime.service");
 const devtoService = require("../services/devto.service");
+const codechefService = require("../services/codechef.service");
+const atcoderService = require("../services/atcoder.service");
 
 const FETCHERS = {
   github: async (p) => {
-    // Decrypt the OAuth access token stored at login time
     let userToken = null;
     if (p.api_key) {
       try { userToken = decrypt(p.api_key); } catch { /* ignore */ }
@@ -30,6 +31,8 @@ const FETCHERS = {
   leetcode: async (p) => leetcodeService.fetchAll(p.platform_username),
   gfg: async (p) => gfgService.fetchAll(p.platform_username),
   codeforces: async (p) => codeforcesService.fetchAll(p.platform_username),
+  codechef: async (p) => codechefService.fetchAll(p.platform_username),
+  atcoder: async (p) => atcoderService.fetchAll(p.platform_username),
   wakatime: async (p) => wakatimeService.fetchAll({ encryptedApiKey: p.api_key }),
   devto: async (p) => devtoService.fetchAll(p.platform_username),
 };

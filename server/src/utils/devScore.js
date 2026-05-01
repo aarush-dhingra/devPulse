@@ -22,22 +22,28 @@ const ANCHORS = {
   wakatimeHours30d: 200,
   codeforcesRating: 2400,
   gfgScore: 5000,
+  codechefRating: 2200,
+  atcoderRating: 2800,
 };
 
 const WEIGHTS = {
-  github: 0.3,
-  leetcode: 0.25,
-  wakatime: 0.2,
-  codeforces: 0.15,
-  gfg: 0.1,
+  github: 0.25,
+  leetcode: 0.20,
+  wakatime: 0.15,
+  codeforces: 0.12,
+  gfg: 0.08,
+  codechef: 0.10,
+  atcoder: 0.10,
 };
 
 function computeDevScore(stats = {}) {
-  const gh = stats.github || {};
-  const lc = stats.leetcode || {};
-  const wt = stats.wakatime || {};
-  const cf = stats.codeforces || {};
-  const gfg = stats.gfg || {};
+  const gh  = stats.github     || {};
+  const lc  = stats.leetcode   || {};
+  const wt  = stats.wakatime   || {};
+  const cf  = stats.codeforces || {};
+  const gfg = stats.gfg        || {};
+  const cc  = stats.codechef   || {};
+  const ac  = stats.atcoder    || {};
 
   const githubCommits = safeNum(
     gh.commits?.totalSearched ??
@@ -50,28 +56,27 @@ function computeDevScore(stats = {}) {
     safeNum(lc.solved?.medium) * 3 +
     safeNum(lc.solved?.hard) * 5;
 
-  const wakatimeHours = safeNum(wt.hoursLast30Days);
+  const wakatimeHours    = safeNum(wt.hoursLast30Days);
   const codeforcesRating = safeNum(cf.rating);
-  const gfgScore = safeNum(gfg.score);
+  const gfgScore         = safeNum(gfg.score);
+  const codechefRating   = safeNum(cc.rating);
+  const atcoderRating    = safeNum(ac.rating);
 
   const components = {
-    github: norm(githubCommits, ANCHORS.githubCommits, { logScale: true }),
-    leetcode: norm(leetcodeWeighted, ANCHORS.leetcodeWeighted, {
-      logScale: true,
-    }),
-    wakatime: norm(wakatimeHours, ANCHORS.wakatimeHours30d),
+    github:     norm(githubCommits, ANCHORS.githubCommits, { logScale: true }),
+    leetcode:   norm(leetcodeWeighted, ANCHORS.leetcodeWeighted, { logScale: true }),
+    wakatime:   norm(wakatimeHours, ANCHORS.wakatimeHours30d),
     codeforces: norm(codeforcesRating, ANCHORS.codeforcesRating),
-    gfg: norm(gfgScore, ANCHORS.gfgScore, { logScale: true }),
+    gfg:        norm(gfgScore, ANCHORS.gfgScore, { logScale: true }),
+    codechef:   norm(codechefRating, ANCHORS.codechefRating),
+    atcoder:    norm(atcoderRating, ANCHORS.atcoderRating),
   };
 
-  const weighted =
-    components.github * WEIGHTS.github +
-    components.leetcode * WEIGHTS.leetcode +
-    components.wakatime * WEIGHTS.wakatime +
-    components.codeforces * WEIGHTS.codeforces +
-    components.gfg * WEIGHTS.gfg;
+  let weighted = 0;
+  for (const [k, w] of Object.entries(WEIGHTS)) {
+    weighted += (components[k] || 0) * w;
+  }
 
-  // Map [0..100] to [0..1000]
   const score = Math.round(weighted * 10);
 
   return {
@@ -84,6 +89,8 @@ function computeDevScore(stats = {}) {
       wakatimeHours,
       codeforcesRating,
       gfgScore,
+      codechefRating,
+      atcoderRating,
     },
   };
 }

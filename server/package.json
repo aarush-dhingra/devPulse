@@ -1,7 +1,7 @@
 {
-  "name": "devpulse-server",
+  "name": "devvitals-server",
   "version": "0.1.0",
-  "description": "DevPulse backend — developer analytics dashboard API",
+  "description": "DevVitals backend — developer analytics dashboard API",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {

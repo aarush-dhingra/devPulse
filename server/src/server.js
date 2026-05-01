@@ -16,7 +16,7 @@ async function start() {
   }
 
   const server = app.listen(env.PORT, () => {
-    logger.info(`DevPulse API listening on http://localhost:${env.PORT}`);
+    logger.info(`DevVitals API listening on http://localhost:${env.PORT}`);
     logger.info(`Environment: ${env.NODE_ENV}`);
   });
 

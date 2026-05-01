@@ -13,8 +13,8 @@ const PHASE_META = {
   long_break: { label: "Long", color: "#f472b6" },
 };
 
-const STORAGE_KEY = "devpulse:pomodoro:v2";
-const SETTINGS_KEY = "devpulse:pomodoro:settings:v1";
+const STORAGE_KEY = "devvitals:pomodoro:v2";
+const SETTINGS_KEY = "devvitals:pomodoro:settings:v1";
 
 const MIN_MINUTES = 1;
 const MAX_MINUTES = 120;
@@ -108,8 +108,8 @@ export default function FocusMode() {
     const handler = () => {
       if (!running) start();
     };
-    window.addEventListener("devpulse:focus:start", handler);
-    return () => window.removeEventListener("devpulse:focus:start", handler);
+    window.addEventListener("devvitals:focus:start", handler);
+    return () => window.removeEventListener("devvitals:focus:start", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, phase, settings, remaining, endsAt]);
 

@@ -19,7 +19,7 @@ async function sendWeeklyDigest() {
       const html = emailService.renderWeeklyDigest({ user, stats, devscore });
       await emailService.sendMail({
         to: user.email,
-        subject: `Your DevPulse — DevScore ${devscore.score}`,
+        subject: `Your DevVitals — DevScore ${devscore.score}`,
         html,
       });
       out.push({ userId: user.id, ok: true });

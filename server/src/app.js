@@ -43,7 +43,7 @@ app.use(globalLimiter);
 app.use("/api", apiRoutes);
 
 app.get("/", (req, res) => {
-  res.json({ name: "DevPulse API", status: "running", docs: "/api/health" });
+  res.json({ name: "DevVitals API", status: "running", docs: "/api/health" });
 });
 
 app.use(notFoundHandler);

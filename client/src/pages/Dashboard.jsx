@@ -120,7 +120,7 @@ export default function Dashboard() {
         description={
           error
             ? `Request failed: ${error}. Check the server console.`
-            : "Connect a platform to start building your DevPulse."
+            : "Connect a platform to start building your DevVitals."
         }
         action={
           <div className="flex gap-2">

@@ -69,4 +69,4 @@ scheduleRecurring().catch((err) =>
   logger.error("Failed to schedule recurring jobs", { error: err.message })
 );
 
-logger.info("DevPulse worker running");
+logger.info("DevVitals worker running");

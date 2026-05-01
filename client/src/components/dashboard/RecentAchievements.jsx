@@ -4,7 +4,7 @@ import { relativeTime } from "../../utils/formatters";
 import PlatformLogo, { PLATFORM_LOGO_PATHS } from "../ui/PlatformLogo";
 
 const SOURCE_META = {
-  internal: { label: "DevPulse", color: "rgba(124,58,237,0.18)" },
+  internal: { label: "DevVitals", color: "rgba(124,58,237,0.18)" },
   leetcode: { label: "LeetCode", color: "rgba(255,161,22,0.18)", brand: "#ffa116" },
   github: { label: "GitHub", color: "rgba(255,255,255,0.10)", brand: "#e6edf3" },
   codeforces: { label: "Codeforces", color: "rgba(254,100,111,0.18)", brand: "#fe646f" },

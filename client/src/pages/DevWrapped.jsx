@@ -101,7 +101,7 @@ export default function DevWrapped() {
     <div className="max-w-3xl mx-auto space-y-6">
       <header>
         <h1 className="text-3xl font-display font-extrabold tracking-tight gradient-text">
-          DevPulse Wrapped
+          DevVitals Wrapped
         </h1>
         <p className="text-ink-muted mt-1">
           Your year in code, distilled. Showing the platforms you actually used.

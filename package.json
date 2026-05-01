@@ -1,8 +1,8 @@
 {
-  "name": "devpulse",
+  "name": "devvitals",
   "version": "0.1.0",
   "private": true,
-  "description": "DevPulse — full-stack developer analytics dashboard with community features.",
+  "description": "DevVitals — full-stack developer analytics dashboard with community features.",
   "workspaces": [
     "client",
     "server"

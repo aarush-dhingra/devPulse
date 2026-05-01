@@ -18,7 +18,7 @@ const router = express.Router();
 router.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    service: "devpulse-api",
+    service: "devvitals-api",
     time: new Date().toISOString(),
   });
 });

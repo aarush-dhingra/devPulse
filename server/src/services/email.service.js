@@ -31,7 +31,7 @@ async function sendMail({ to, subject, html, text }) {
     return { skipped: true };
   }
   const info = await t.sendMail({
-    from: env.EMAIL_FROM || "DevPulse <noreply@devpulse.dev>",
+    from: env.EMAIL_FROM || "DevVitals <noreply@devvitals.dev>",
     to,
     subject,
     html,
@@ -48,7 +48,7 @@ function renderWeeklyDigest({ user, stats, devscore }) {
   return `
     <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#0f172a;color:#f8fafc;border-radius:16px">
       <h1 style="margin:0 0 4px;font-size:24px">Hey ${user.name || user.username} 👋</h1>
-      <p style="color:#94a3b8;margin:0 0 24px">Here's your DevPulse this week</p>
+      <p style="color:#94a3b8;margin:0 0 24px">Here's your DevVitals this week</p>
 
       <div style="background:#1e293b;padding:20px;border-radius:12px;margin-bottom:16px">
         <div style="font-size:14px;color:#94a3b8">DevScore</div>

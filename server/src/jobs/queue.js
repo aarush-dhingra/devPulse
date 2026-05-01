@@ -5,7 +5,7 @@ const env = require("../config/env");
 const { makeClient } = require("../config/redis");
 const logger = require("../utils/logger");
 
-const QUEUE_NAME = "devpulse-jobs";
+const QUEUE_NAME = "devvitals-jobs";
 
 let queue = null;
 let queueEvents = null;

@@ -11,10 +11,11 @@ const PLATFORM_META = {
   leetcode:   { color: "#ffa116", label: "LeetCode",    format: (v) => `${Math.round(v)} solved` },
   codeforces: { color: "#fe646f", label: "Codeforces",  format: (v) => `${Math.round(v)} solved` },
   gfg:        { color: "#2f8d46", label: "GFG",         format: (v) => `${Math.round(v)} solved` },
+  codechef:   { color: "#5b4638", label: "CodeChef",    format: (v) => `${Math.round(v)} solved` },
+  atcoder:    { color: "#b0c4de", label: "AtCoder",     format: (v) => `${Math.round(v)} solved` },
 };
 
-/* Platform stack order — bottom to top */
-const STACK_ORDER = ["wakatime", "github", "leetcode", "codeforces", "gfg"];
+const STACK_ORDER = ["wakatime", "github", "leetcode", "codeforces", "gfg", "codechef", "atcoder"];
 
 /* Map dashboard period → number of days the timeline should show.
    Daily bars stay readable up to ~30 columns. */
@@ -50,11 +51,23 @@ function buildDays(stats, heatmapData, n = 14) {
   fill(cf.dailySubmissions,        "codeforces");
   fill(wt.dailyHours,              "wakatime", "hours");
 
+  const cc = stats?.codechef || {};
+  const ac = stats?.atcoder  || {};
+  fill(cc.dailySubmissions, "codechef");
+  fill(ac.dailySubmissions, "atcoder");
+
   if (heatmapData?.heatmap) {
     for (const cell of heatmapData.heatmap) {
       const day = days.find((d) => d.iso === cell.date);
-      if (day && cell.breakdown?.gfg > 0) {
+      if (!day) continue;
+      if (cell.breakdown?.gfg > 0) {
         day.segments.gfg = (day.segments.gfg || 0) + Number(cell.breakdown.gfg);
+      }
+      if (cell.breakdown?.codechef > 0) {
+        day.segments.codechef = (day.segments.codechef || 0) + Number(cell.breakdown.codechef);
+      }
+      if (cell.breakdown?.atcoder > 0) {
+        day.segments.atcoder = (day.segments.atcoder || 0) + Number(cell.breakdown.atcoder);
       }
     }
   }

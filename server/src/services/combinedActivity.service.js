@@ -85,6 +85,14 @@ function gfgExtractor(raw) {
   return { total: Number(raw?.problemsSolved || 0) };
 }
 
+function codechefExtractor(raw) {
+  return { total: Number(raw?.problemsSolved || 0) };
+}
+
+function atcoderExtractor(raw) {
+  return { total: Number(raw?.uniqueSolved || 0) };
+}
+
 /* ─── heatmap bucket helpers ─────────────────────────────────────── */
 
 function bucketGithub(stats) {
@@ -138,6 +146,26 @@ async function bucketGfgFromHistory(userId) {
   return m;
 }
 
+function bucketCodechef(stats) {
+  const days = stats?.codechef?.dailySubmissions || [];
+  const m = {};
+  for (const d of days) {
+    if (!d?.date) continue;
+    m[d.date] = (m[d.date] || 0) + Number(d.count || 0);
+  }
+  return m;
+}
+
+function bucketAtcoder(stats) {
+  const days = stats?.atcoder?.dailySubmissions || [];
+  const m = {};
+  for (const d of days) {
+    if (!d?.date) continue;
+    m[d.date] = (m[d.date] || 0) + Number(d.count || 0);
+  }
+  return m;
+}
+
 /* ─── streaks ────────────────────────────────────────────────────── */
 
 function computeStreaks(orderedDates, totalsMap) {
@@ -174,6 +202,8 @@ async function buildHeatmap(userId, days = 365) {
     codeforces: bucketCodeforces(stats),
     wakatime:   bucketWakatime(stats),
     gfg:        gfgBucket,
+    codechef:   bucketCodechef(stats),
+    atcoder:    bucketAtcoder(stats),
   };
 
   const perDayBreakdown = {};
@@ -184,13 +214,17 @@ async function buildHeatmap(userId, days = 365) {
       codeforces: Number(sources.codeforces[date] || 0),
       wakatime:   Number(sources.wakatime[date]   || 0),
       gfg:        Number(sources.gfg[date]        || 0),
+      codechef:   Number(sources.codechef[date]   || 0),
+      atcoder:    Number(sources.atcoder[date]    || 0),
     };
     const total =
       breakdown.github +
       breakdown.leetcode +
       breakdown.codeforces +
       breakdown.wakatime +
-      breakdown.gfg;
+      breakdown.gfg +
+      breakdown.codechef +
+      breakdown.atcoder;
     totals[date] = Number(total.toFixed(2));
     perDayBreakdown[date] = breakdown;
   }
@@ -256,18 +290,22 @@ async function buildProblemsSeries(userId, days = 90) {
   /* ── snapshot deltas (accurate recent data) ── */
   const history = await statsModel.getMultiPlatformHistory(
     userId,
-    ["leetcode", "codeforces", "gfg"],
+    ["leetcode", "codeforces", "gfg", "codechef", "atcoder"],
     60
   );
 
-  const lcDeltas  = snapshotDeltas(history.leetcode  || [], lcExtractor);
-  const cfDeltas  = snapshotDeltas(history.codeforces || [], cfExtractor);
-  const gfgDeltas = snapshotDeltas(history.gfg        || [], gfgExtractor);
+  const lcDeltas       = snapshotDeltas(history.leetcode   || [], lcExtractor);
+  const cfDeltas       = snapshotDeltas(history.codeforces || [], cfExtractor);
+  const gfgDeltas      = snapshotDeltas(history.gfg        || [], gfgExtractor);
+  const codechefDeltas = snapshotDeltas(history.codechef   || [], codechefExtractor);
+  const atcoderDeltas  = snapshotDeltas(history.atcoder    || [], atcoderExtractor);
 
   const deltasDates = new Set([
     ...Object.keys(lcDeltas),
     ...Object.keys(cfDeltas),
     ...Object.keys(gfgDeltas),
+    ...Object.keys(codechefDeltas),
+    ...Object.keys(atcoderDeltas),
   ]);
 
   /* ── calendar fallback (historical data before first snapshot) ── */
@@ -281,6 +319,10 @@ async function buildProblemsSeries(userId, days = 90) {
   for (const d of stats?.codeforces?.dailySubmissions || []) {
     if (d?.date) cfCalendar[d.date] = Number(d.count || 0);
   }
+  const atcoderCalendar = {};
+  for (const d of stats?.atcoder?.dailySubmissions || []) {
+    if (d?.date) atcoderCalendar[d.date] = Number(d.count || 0);
+  }
 
   const lc = stats?.leetcode?.solved || {};
   const lcE = Number(lc.easy || 0), lcM = Number(lc.medium || 0), lcH = Number(lc.hard || 0);
@@ -292,12 +334,14 @@ async function buildProblemsSeries(userId, days = 90) {
   /* ── merge: deltas take priority, calendar fills gaps ── */
   const daily = dates.map((date) => {
     if (deltasDates.has(date)) {
-      const lc  = lcDeltas[date]  || {};
-      const cf  = cfDeltas[date]  || {};
-      const gfg = gfgDeltas[date] || {};
-      const easy   = Number(lc.easy   || 0) + Number(gfg.total || 0);
+      const lc  = lcDeltas[date]       || {};
+      const cf  = cfDeltas[date]       || {};
+      const gfg = gfgDeltas[date]      || {};
+      const cc  = codechefDeltas[date] || {};
+      const ac  = atcoderDeltas[date]  || {};
+      const easy   = Number(lc.easy   || 0) + Number(gfg.total || 0) + Number(cc.total || 0);
       const medium = Number(lc.medium || 0);
-      const hard   = Number(lc.hard   || 0) + Number(cf.total  || 0);
+      const hard   = Number(lc.hard   || 0) + Number(cf.total  || 0) + Number(ac.total || 0);
       return { date, easy, medium, hard, total: easy + medium + hard };
     }
 
@@ -307,11 +351,12 @@ async function buildProblemsSeries(userId, days = 90) {
 
     const lcCount = lcCalendar[date] || 0;
     const cfCount = cfCalendar[date] || 0;
-    if (lcCount === 0 && cfCount === 0) return { date, ...emptyRow() };
+    const acCount = atcoderCalendar[date] || 0;
+    if (lcCount === 0 && cfCount === 0 && acCount === 0) return { date, ...emptyRow() };
 
     const easy   = Math.round(lcCount * lcRatio.easy);
     const medium = Math.round(lcCount * lcRatio.medium);
-    const hard   = Math.max(0, lcCount - easy - medium) + cfCount;
+    const hard   = Math.max(0, lcCount - easy - medium) + cfCount + acCount;
     return { date, easy, medium, hard, total: easy + medium + hard };
   });
 

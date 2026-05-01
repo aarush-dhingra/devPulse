@@ -12,6 +12,8 @@ const items = [
   { to: "/dashboard/leetcode",   label: "LeetCode",      icon: PlatformIcon("leetcode")   },
   { to: "/dashboard/gfg",        label: "GeeksForGeeks", icon: PlatformIcon("gfg")        },
   { to: "/dashboard/codeforces", label: "Codeforces",    icon: PlatformIcon("codeforces") },
+  { to: "/dashboard/codechef",   label: "CodeChef",      icon: PlatformIcon("codechef")   },
+  { to: "/dashboard/atcoder",    label: "AtCoder",       icon: PlatformIcon("atcoder")    },
   { to: "/dashboard/wakatime",   label: "Wakatime",      icon: PlatformIcon("wakatime")   },
   { to: "/dashboard/devto",      label: "Dev.to",        icon: PlatformIcon("devto")      },
   { to: ROUTES.leaderboard, label: "Leaderboard", icon: TrophyIcon, divider: true },
@@ -37,15 +39,18 @@ export default function Sidebar({ collapsed, onToggle }) {
       <div className={`flex items-center ${collapsed ? "justify-center px-0 py-3" : "gap-2.5 px-3 py-3"}`}>
         <Link
           to="/"
-          className="grid place-items-center w-8 h-8 rounded-xl bg-gradient-to-br from-accent-500 to-cyan-500 glow-violet shrink-0"
-          title="DevPulse"
+          className="grid place-items-center w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 glow-violet shrink-0"
+          title="DevVitals"
         >
-          <span className="text-white font-black text-sm">⚡</span>
+          <svg viewBox="0 0 32 32" width="20" height="20" fill="none">
+            <path d="M4 17 L10 17 L13 10 L16 24 L19 14 L21 17 L28 17"
+                  stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </Link>
         {!collapsed && (
           <div className="min-w-0 flex-1">
-            <div className="font-display font-bold text-base leading-none gradient-text">DevPulse</div>
-            <div className="text-[9px] uppercase tracking-[0.2em] text-ink-faint mt-0.5">v0.1 · beta</div>
+            <div className="font-display font-bold text-base leading-none gradient-text">DevVitals</div>
+            <div className="text-[9px] uppercase tracking-[0.2em] text-ink-faint mt-0.5">Track · Analyze · Improve</div>
           </div>
         )}
         {/* Toggle button */}

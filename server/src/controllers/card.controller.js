@@ -27,7 +27,7 @@ function buildSvgCard({ user, devscore, tier, topLanguages, topStats }) {
   </defs>
   <rect width="900" height="380" rx="24" fill="url(#bg)"/>
   <text x="40" y="64" fill="#f8fafc" font-size="32" font-weight="700" font-family="Inter">${escapeXml(user.name || user.username)}</text>
-  <text x="40" y="92" fill="#94a3b8" font-size="16" font-family="Inter">@${escapeXml(user.username)} · DevPulse</text>
+  <text x="40" y="92" fill="#94a3b8" font-size="16" font-family="Inter">@${escapeXml(user.username)} · DevVitals</text>
 
   <g transform="translate(640,40)">
     <circle cx="100" cy="100" r="92" fill="none" stroke="#1e293b" stroke-width="14"/>
