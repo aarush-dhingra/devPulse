@@ -1,6 +1,7 @@
 /**
- * ProblemsSolvedChart — daily/weekly problem activity bars (Easy/Medium/Hard)
- * with an overlay "Total" line.
+ * ProblemsSolvedChart — daily/weekly problem activity bars with exact
+ * Easy/Medium/Hard buckets where available and a neutral Activity bucket for
+ * platform data that does not expose reliable difficulty.
  *
  * Snapshot deltas are exact where available. Historical LeetCode calendar
  * fallback is submission activity, so the UI labels this as activity.
@@ -25,6 +26,7 @@ const DIFF_META = {
   easy:   { color: "#22c55e", label: "Easy" },
   medium: { color: "#f59e0b", label: "Medium" },
   hard:   { color: "#ef4444", label: "Hard" },
+  unknown:{ color: "#64748b", label: "Activity" },
 };
 const TOTAL_COLOR    = "#a78bfa";
 const BEST_COLOR     = "#fbbf24";
@@ -56,7 +58,8 @@ function CustomTooltip({ active, payload, label }) {
   const easy   = payload.find((p) => p.dataKey === "easy")?.value   || 0;
   const medium = payload.find((p) => p.dataKey === "medium")?.value || 0;
   const hard   = payload.find((p) => p.dataKey === "hard")?.value   || 0;
-  const total  = easy + medium + hard;
+  const unknown = payload.find((p) => p.dataKey === "unknown")?.value || 0;
+  const total  = Number(row.total || 0) || easy + medium + hard + unknown;
   if (!total) return null;
   const platformRows = Object.entries(row.breakdown || {})
     .filter(([, v]) => Number(v) > 0);
@@ -81,11 +84,11 @@ function CustomTooltip({ active, payload, label }) {
           })}
         </div>
       )}
-      {Object.entries({ easy, medium, hard }).map(([k, v]) => (
+      {Object.entries({ easy, medium, hard, unknown }).map(([k, v]) => (
         v > 0 && (
           <div key={k} className="flex items-center gap-2 text-ink-muted mb-1">
             <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: DIFF_META[k].color }} />
-            <span className="flex-1 capitalize">{k}</span>
+            <span className="flex-1">{DIFF_META[k].label}</span>
             <span className="text-ink font-medium tabular-nums">{v}</span>
           </div>
         )
@@ -110,6 +113,7 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
       easy:   Number(d.easy   || 0),
       medium: Number(d.medium || 0),
       hard:   Number(d.hard   || 0),
+      unknown:Number(d.unknown || 0),
       total:  Number(d.total  || 0),
       breakdown: d.breakdown || {},
     }));
@@ -124,11 +128,12 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
       mon.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
       const key = mon.toISOString().slice(0, 10);
       if (!buckets[key]) {
-        buckets[key] = { date: key, easy: 0, medium: 0, hard: 0, total: 0, breakdown: {} };
+        buckets[key] = { date: key, easy: 0, medium: 0, hard: 0, unknown: 0, total: 0, breakdown: {} };
       }
       buckets[key].easy   += d.easy;
       buckets[key].medium += d.medium;
       buckets[key].hard   += d.hard;
+      buckets[key].unknown += d.unknown;
       buckets[key].total  += d.total;
       for (const [platform, value] of Object.entries(d.breakdown || {})) {
         buckets[key].breakdown[platform] =
@@ -143,8 +148,13 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
   const periodLbl  = viewMode === "weekly" ? "weekly" : `last ${period}`;
 
   const diffTotals = chartData.reduce(
-    (acc, d) => ({ easy: acc.easy + d.easy, medium: acc.medium + d.medium, hard: acc.hard + d.hard }),
-    { easy: 0, medium: 0, hard: 0 }
+    (acc, d) => ({
+      easy: acc.easy + d.easy,
+      medium: acc.medium + d.medium,
+      hard: acc.hard + d.hard,
+      unknown: acc.unknown + d.unknown,
+    }),
+    { easy: 0, medium: 0, hard: 0, unknown: 0 }
   );
 
   const { bestDay, zeroDays } = useMemo(() => {
@@ -250,6 +260,7 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
                 iconType="square"
                 wrapperStyle={{ fontSize: 10, color: chartTheme.text, paddingBottom: 4 }}
               />
+              <Bar dataKey="unknown" stackId="d" name="Activity" fill={DIFF_META.unknown.color} maxBarSize={28} />
               <Bar dataKey="easy"   stackId="d" name="Easy"   fill={DIFF_META.easy.color}   maxBarSize={28} />
               <Bar dataKey="medium" stackId="d" name="Medium" fill={DIFF_META.medium.color} maxBarSize={28} />
               <Bar dataKey="hard"   stackId="d" name="Hard"   fill={DIFF_META.hard.color}   maxBarSize={28} radius={[4, 4, 0, 0]} />

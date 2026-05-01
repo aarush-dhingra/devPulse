@@ -1,9 +1,7 @@
 /**
- * TodayFocus — hero panel with score, today's tasks, and a "Start Focus
- * Session" CTA. The score is auto-derived from today's stats; the task
- * list is fully user-defined via SmartTasks. The CTA scrolls to and
- * starts the in-page Focus Mode panel via a custom event so it always
- * works regardless of where Focus Mode is mounted on the dashboard.
+ * TodayFocus — compact hero panel with today's score and user-defined tasks.
+ * The score is auto-derived from today's stats; the task list is fully
+ * user-defined via SmartTasks.
  */
 import { useMemo } from "react";
 import SmartTasks from "./SmartTasks";
@@ -83,8 +81,8 @@ const SCORE_META = {
 };
 
 function ScoreRing({ score, level, label, delta }) {
-  const SIZE = 190;
-  const R = 82;
+  const SIZE = 156;
+  const R = 66;
   const C = 2 * Math.PI * R;
   const { color, glow } = SCORE_META[level];
   const dash = C * (Math.max(0, Math.min(100, score)) / 100);
@@ -93,15 +91,15 @@ function ScoreRing({ score, level, label, delta }) {
   const deltaArrow = delta > 0 ? "↗" : delta < 0 ? "↘" : "·";
 
   return (
-    <div className="flex flex-col items-center gap-2.5 shrink-0">
-      <div className="text-[11px] uppercase tracking-widest text-ink-faint">Today's Score</div>
+    <div className="flex flex-col items-center gap-1.5 shrink-0">
+      <div className="text-[10px] uppercase tracking-widest text-ink-faint">Today's Score</div>
       <div className="relative" style={{ width: SIZE, height: SIZE }}>
-        <svg viewBox="0 0 190 190" width={SIZE} height={SIZE} style={{ transform: "rotate(-90deg)" }}>
-          <circle cx="95" cy="95" r={R} stroke="rgba(255,255,255,0.06)" strokeWidth="10" fill="none" />
+        <svg viewBox="0 0 156 156" width={SIZE} height={SIZE} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx="78" cy="78" r={R} stroke="rgba(255,255,255,0.06)" strokeWidth="8" fill="none" />
           <circle
-            cx="95" cy="95" r={R}
+            cx="78" cy="78" r={R}
             stroke={color}
-            strokeWidth="10"
+            strokeWidth="8"
             fill="none"
             strokeLinecap="round"
             strokeDasharray={`${dash} ${C - dash}`}
@@ -114,19 +112,19 @@ function ScoreRing({ score, level, label, delta }) {
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="flex items-baseline">
             <span
-              className="font-display font-bold text-6xl leading-none tabular-nums"
+              className="font-display font-bold text-5xl leading-none tabular-nums"
               style={{ color, textShadow: `0 0 24px ${glow}` }}
             >
               {score}
             </span>
             <span className="text-xs text-ink-faint ml-1">/100</span>
           </div>
-          <span className="text-sm font-semibold mt-1.5" style={{ color }}>
+          <span className="text-xs font-semibold mt-1" style={{ color }}>
             {label}
           </span>
         </div>
       </div>
-      <div className="text-[11px] tabular-nums font-semibold" style={{ color: deltaColor }}>
+      <div className="text-[10px] tabular-nums font-semibold" style={{ color: deltaColor }}>
         {deltaArrow} {Math.abs(delta)}% vs yesterday
       </div>
     </div>
@@ -140,16 +138,6 @@ export default function TodayFocus({ stats = {} }) {
     () => computeScore(stats),
     [stats]
   );
-
-  /**
-   * Scroll to the FocusMode panel and ask it to start its timer.
-   * FocusMode listens for the custom "devvitals:focus:start" event.
-   */
-  const startFocus = () => {
-    const node = document.getElementById("focus-mode");
-    if (node) node.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.dispatchEvent(new CustomEvent("devvitals:focus:start"));
-  };
 
   return (
     <div
@@ -168,25 +156,9 @@ export default function TodayFocus({ stats = {} }) {
       <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full blur-3xl pointer-events-none opacity-50"
         style={{ background: "radial-gradient(circle, rgba(139,92,246,0.16) 0%, transparent 70%)" }} />
 
-      <div className="relative px-5 py-4">
-        {/* Header row: CTA only; page header already owns the greeting. */}
-        <div className="flex items-start justify-end mb-4 gap-3 flex-wrap">
-          <button
-            onClick={startFocus}
-            className="rounded-lg px-4 py-2 text-[12px] font-bold uppercase tracking-wider transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"
-            style={{
-              background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
-              boxShadow: "0 0 18px rgba(124,58,237,0.4), 0 1px 0 rgba(255,255,255,0.08) inset",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 0 28px rgba(124,58,237,0.6), 0 1px 0 rgba(255,255,255,0.1) inset"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 0 18px rgba(124,58,237,0.4), 0 1px 0 rgba(255,255,255,0.08) inset"; }}
-          >
-            ▶ Start Focus Session
-          </button>
-        </div>
-
+      <div className="relative px-4 py-3">
         {/* Body: score + tasks */}
-        <div className="flex flex-col sm:flex-row gap-5 items-stretch">
+        <div className="flex flex-col sm:flex-row gap-4 items-stretch">
           <ScoreRing
             score={dailyScore}
             level={scoreLevel}

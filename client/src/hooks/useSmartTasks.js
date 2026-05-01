@@ -15,8 +15,9 @@
  *   platform  – "all" | "leetcode" | "codeforces" | "gfg" | "github" | "wakatime"
  *   autotrack – boolean (false only for "custom")
  *   createdAt – timestamp
+ *   baselineProgress – auto-tracked value at creation time
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "devvitals:smart-tasks:v3";
 
@@ -93,10 +94,30 @@ export function useSmartTasks(stats) {
       platform:  fields.platform ?? "all",
       autotrack: type !== "custom",
       createdAt: Date.now(),
+      baselineProgress: type !== "custom"
+        ? getTodayProgress(type, fields.platform ?? "all", stats)
+        : 0,
     };
     setTasks((prev) => [...prev, task]);
     return task;
-  }, [setTasks]);
+  }, [setTasks, stats]);
+
+  useEffect(() => {
+    setTasks((prev) => {
+      let changed = false;
+      const next = prev.map((task) => {
+        if (!task.autotrack || Number.isFinite(Number(task.baselineProgress))) {
+          return task;
+        }
+        changed = true;
+        return {
+          ...task,
+          baselineProgress: getTodayProgress(task.type, task.platform, stats),
+        };
+      });
+      return changed ? next : prev;
+    });
+  }, [setTasks, stats]);
 
   const removeTask = useCallback((id) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
@@ -115,7 +136,11 @@ export function useSmartTasks(stats) {
         done = !!manualDone[task.id];
         progress = done ? task.target : 0;
       } else {
-        progress = getTodayProgress(task.type, task.platform, stats);
+        const current = getTodayProgress(task.type, task.platform, stats);
+        const baseline = Number.isFinite(Number(task.baselineProgress))
+          ? Number(task.baselineProgress)
+          : current;
+        progress = Math.max(0, current - baseline);
         done = progress >= task.target;
       }
       const pct = task.target > 0 ? Math.min(100, Math.round((progress / task.target) * 100)) : 0;

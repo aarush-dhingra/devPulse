@@ -321,17 +321,15 @@ async function buildHeatmap(userId, days = 365) {
 /* ─── buildProblemsSeries (hybrid: snapshot deltas + calendar fallback) ── */
 
 /**
- * Daily problems-solved series using a hybrid approach:
+ * Daily problem-activity series using a hybrid approach:
  *
  * 1. **Snapshot deltas** (primary, accurate): for every day where we have
  *    two consecutive snapshots, we diff `solved.easy/medium/hard` to get
  *    exact per-difficulty counts.
  *
- * 2. **Calendar fallback** (historical): for days BEFORE the first snapshot,
- *    we use LeetCode/Codeforces raw `dailySubmissions` calendar data. The
- *    calendar gives submission counts (not exact problems solved) but it's
- *    the best signal available for historical data.  We split LC calendar
- *    counts into easy/medium/hard using the user's lifetime ratio.
+ * 2. **Calendar fallback** (historical): when exact difficulty deltas are
+ *    unavailable, we keep the activity in an `unknown` bucket. This avoids
+ *    showing fake Easy/Medium/Hard spikes from submission-only calendars.
  *
  * This ensures the chart shows full historical activity while being exact
  * for recent days where snapshot data exists.
@@ -339,7 +337,7 @@ async function buildHeatmap(userId, days = 365) {
 async function buildProblemsSeries(userId, days = 90) {
   const stats = await statsModel.getLatestForUser(userId);
   const dates = windowDates(days);
-  const emptyRow = () => ({ easy: 0, medium: 0, hard: 0, total: 0 });
+  const emptyRow = () => ({ easy: 0, medium: 0, hard: 0, unknown: 0, total: 0 });
 
   /* ── snapshot deltas (accurate recent data) ── */
   const history = await statsModel.getMultiPlatformHistory(
@@ -369,13 +367,6 @@ async function buildProblemsSeries(userId, days = 90) {
     if (d?.date) atcoderCalendar[d.date] = Number(d.count || 0);
   }
 
-  const lc = stats?.leetcode?.solved || {};
-  const lcE = Number(lc.easy || 0), lcM = Number(lc.medium || 0), lcH = Number(lc.hard || 0);
-  const lcT = lcE + lcM + lcH;
-  const lcRatio = lcT > 0
-    ? { easy: lcE / lcT, medium: lcM / lcT, hard: lcH / lcT }
-    : { easy: 0.45, medium: 0.45, hard: 0.10 };
-
   /* ── merge: deltas take priority, calendar fills gaps ── */
   const daily = dates.map((date) => {
     const lcDelta = lcDeltas[date];
@@ -384,13 +375,16 @@ async function buildProblemsSeries(userId, days = 90) {
       : Number(lcCalendar[date] || 0);
     const lcEasy = lcDelta
       ? Number(lcDelta.easy || 0)
-      : Math.round(lcCount * lcRatio.easy);
+      : 0;
     const lcMedium = lcDelta
       ? Number(lcDelta.medium || 0)
-      : Math.round(lcCount * lcRatio.medium);
+      : 0;
     const lcHard = lcDelta
       ? Number(lcDelta.hard || 0)
-      : Math.max(0, lcCount - lcEasy - lcMedium);
+      : 0;
+    const lcUnknown = lcDelta
+      ? Math.max(0, Number(lcDelta.total || 0) - lcEasy - lcMedium - lcHard)
+      : lcCount;
 
     const cfTotal = cfDeltas[date]
       ? Number(cfDeltas[date].total || 0)
@@ -401,10 +395,11 @@ async function buildProblemsSeries(userId, days = 90) {
     const gfgTotal = Number(gfgDeltas[date]?.total || 0);
     const codechefTotal = Number(codechefDeltas[date]?.total || 0);
 
-    const easy = lcEasy + gfgTotal + codechefTotal;
+    const unknown = lcUnknown + cfTotal + acTotal + gfgTotal + codechefTotal;
+    const easy = lcEasy;
     const medium = lcMedium;
-    const hard = lcHard + cfTotal + acTotal;
-    const total = easy + medium + hard;
+    const hard = lcHard;
+    const total = easy + medium + hard + unknown;
 
     if (total === 0) return { date, ...emptyRow(), breakdown: {} };
 
@@ -413,6 +408,7 @@ async function buildProblemsSeries(userId, days = 90) {
       easy,
       medium,
       hard,
+      unknown,
       total,
       breakdown: {
         leetcode: lcCount,
