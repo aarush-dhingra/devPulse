@@ -24,7 +24,6 @@ const PLATFORM_META = {
   codechef:   { label: "CodeChef",      color: "#5b4638", unit: "problems"      },
   atcoder:    { label: "AtCoder",       color: "#b0c4de", unit: "problems"      },
   wakatime:   { label: "WakaTime",      color: "#22d3ee", unit: "hours"         },
-  devto:      { label: "Dev.to",        color: "#cbd5e1", unit: "posts"         },
 };
 
 function fmtValue(key, val) {

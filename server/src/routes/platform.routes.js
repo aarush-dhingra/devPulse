@@ -8,7 +8,7 @@ const { validate } = require("../middlewares/validate.middleware");
 
 const router = express.Router();
 
-const PLATFORMS = ["github", "leetcode", "gfg", "codeforces", "codechef", "atcoder", "wakatime", "devto"];
+const PLATFORMS = ["github", "leetcode", "gfg", "codeforces", "codechef", "atcoder", "wakatime"];
 
 const connectSchema = z.object({
   platform: z.enum(PLATFORMS),

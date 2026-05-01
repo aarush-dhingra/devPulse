@@ -13,11 +13,12 @@ const PLATFORM_HELP = {
   leetcode: { url: "https://leetcode.com", text: "Use your public LeetCode handle." },
   gfg: { url: "https://www.geeksforgeeks.org", text: "Find your handle on geeksforgeeks.org." },
   codeforces: { url: "https://codeforces.com", text: "Use your Codeforces handle." },
+  codechef: { url: "https://www.codechef.com", text: "Your handle from codechef.com/users/YOUR_HANDLE." },
+  atcoder: { url: "https://atcoder.jp", text: "Your handle from atcoder.jp/users/YOUR_HANDLE." },
   wakatime: {
     url: "https://wakatime.com/api-key",
     text: "Grab your API key from wakatime.com/api-key.",
   },
-  devto: { url: "https://dev.to", text: "Use your Dev.to username." },
 };
 
 const STATUS_PILL = {

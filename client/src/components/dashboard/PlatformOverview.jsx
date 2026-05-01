@@ -8,7 +8,7 @@ import EmptyState from "../ui/EmptyState";
 export default function PlatformOverview({ stats = {}, platforms = [] }) {
   const rows = (platforms || [])
     .filter((p) =>
-      ["github", "leetcode", "codeforces", "gfg", "wakatime", "devto"].includes(p.platform_name)
+      ["github", "leetcode", "codeforces", "codechef", "atcoder", "gfg", "wakatime"].includes(p.platform_name)
     )
     .map((p) => buildRow(p, stats[p.platform_name]))
     .filter(Boolean);
@@ -20,7 +20,7 @@ export default function PlatformOverview({ stats = {}, platforms = [] }) {
         <EmptyState
           icon="🔌"
           title="No platforms connected"
-          description="Head to Settings to wire up GitHub, LeetCode, Codeforces, GFG, Wakatime or Dev.to."
+          description="Head to Settings to wire up GitHub, LeetCode, Codeforces, CodeChef, AtCoder, GFG, or Wakatime."
         />
       </div>
     );
@@ -201,15 +201,6 @@ function buildRow(p, data) {
         delta: deltaPct(spark),
         metricA: { label: "Time", value: `${Math.round(data.hoursLast30Days ?? 0)} hrs` },
         metricB: { label: "Daily Avg", value: `${((data.dailyAverageHours ?? 0)).toFixed(1)} hrs` },
-      };
-    }
-    case "devto": {
-      return {
-        ...base,
-        spark: [],
-        delta: null,
-        metricA: { label: "Articles", value: formatNumber(data.articleCount ?? 0) },
-        metricB: { label: "Reactions", value: formatNumber(data.totalReactions ?? 0) },
       };
     }
     default:

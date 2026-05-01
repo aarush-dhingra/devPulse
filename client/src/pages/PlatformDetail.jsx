@@ -99,9 +99,10 @@ function PlatformBody({ platform, stats }) {
     case "github":     return <GitHubBody stats={stats} />;
     case "leetcode":   return <LeetCodeBody stats={stats} />;
     case "codeforces": return <CodeforcesBody stats={stats} />;
+    case "codechef":   return <CodeChefBody stats={stats} />;
+    case "atcoder":    return <AtCoderBody stats={stats} />;
     case "wakatime":   return <WakatimeBody stats={stats} />;
     case "gfg":        return <GFGBody stats={stats} />;
-    case "devto":      return <DevToBody stats={stats} />;
     default:           return null;
   }
 }
@@ -244,32 +245,97 @@ function GFGBody({ stats }) {
   );
 }
 
-function DevToBody({ stats }) {
+function CodeChefBody({ stats }) {
+  const history = (stats.contests || stats.ratingHistory || []).slice(-20).map((c, i) => ({
+    name: c.contestName || c.name || `Contest ${i + 1}`,
+    rating: c.rating || c.newRating || 0,
+  }));
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Articles" value={stats.articleCount ?? 0} icon="📝" accent="#94a3b8" />
-        <StatCard label="Reactions" value={stats.totalReactions ?? 0} icon="❤️" accent="#ef4444" />
-        <StatCard label="Comments" value={stats.totalComments ?? 0} icon="💬" accent="#22d3ee" />
-        <StatCard label="Tags Used" value={Object.keys(stats.tags || {}).length} icon="🏷️" accent="#8b5cf6" />
+        <StatCard label="Current Rating" value={stats.rating ?? 0} icon="🏆" accent="#5b4638" />
+        <StatCard label="Stars" value={stats.stars ? `${stats.stars}★` : "—"} format="raw" icon="⭐" accent="#f59e0b" />
+        <StatCard label="Solved" value={stats.problemsSolved ?? 0} icon="✅" accent="#10b981" />
+        <StatCard label="Contests" value={stats.contestsAttended ?? 0} icon="🎯" accent="#22d3ee" />
       </div>
-      {(stats.topArticles || []).length > 0 && (
+      <div className="grid lg:grid-cols-[1fr_1fr] gap-4">
+        {history.length > 0 && (
+          <div className="panel-pad">
+            <h3 className="font-display font-bold text-lg mb-3">Rating History</h3>
+            <div className="h-64">
+              <ResponsiveContainer>
+                <AreaChart data={history}>
+                  <defs>
+                    <linearGradient id="cc-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#5b4638" stopOpacity="0.6" />
+                      <stop offset="100%" stopColor="#5b4638" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: chartTheme.text, fontSize: 10 }} />
+                  <YAxis tick={{ fill: chartTheme.text, fontSize: 11 }} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area dataKey="rating" stroke="#5b4638" strokeWidth={2} fill="url(#cc-grad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
         <div className="panel-pad">
-          <h3 className="font-display font-bold text-lg mb-3">Top Articles</h3>
-          <ul className="space-y-2">
-            {stats.topArticles.map((a) => (
-              <li key={a.url}>
-                <a href={a.url} target="_blank" rel="noreferrer" className="block p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition">
-                  <div className="font-semibold">{a.title}</div>
-                  <div className="text-xs text-ink-faint mt-1">
-                    ❤ {a.reactions} · 💬 {a.comments} · {new Date(a.publishedAt).toLocaleDateString()}
-                  </div>
-                </a>
-              </li>
-            ))}
-          </ul>
+          <h3 className="font-display font-bold text-lg mb-3">Profile</h3>
+          <DataRow label="Username" value={`@${stats.profile?.username || "—"}`} />
+          <DataRow label="Global Rank" value={stats.globalRank?.toLocaleString() || "—"} />
+          <DataRow label="Country Rank" value={stats.countryRank?.toLocaleString() || "—"} />
+          <DataRow label="Partial Solved" value={stats.partialProblems ?? 0} />
+          <DataRow label="Color" value={stats.color || "—"} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AtCoderBody({ stats }) {
+  const history = (stats.ratingHistory || []).map((r) => ({
+    name: (r.contestName || "").slice(0, 18),
+    rating: r.newRating,
+  }));
+  return (
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Current Rating" value={stats.rating ?? 0} icon="⚡" accent="#b0c4de" />
+        <StatCard label="Max Rating" value={stats.maxRating ?? 0} icon="🚀" accent="#a855f7" />
+        <StatCard label="Unique Solved" value={stats.uniqueSolved ?? stats.acCount ?? 0} icon="✅" accent="#10b981" />
+        <StatCard label="Contests" value={stats.contestsAttended ?? 0} icon="🎯" accent="#22d3ee" />
+      </div>
+      {history.length > 0 && (
+        <div className="panel-pad">
+          <h3 className="font-display font-bold text-lg mb-3">Rating History</h3>
+          <div className="h-64">
+            <ResponsiveContainer>
+              <AreaChart data={history}>
+                <defs>
+                  <linearGradient id="ac-grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#b0c4de" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="#b0c4de" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: chartTheme.text, fontSize: 10 }} />
+                <YAxis tick={{ fill: chartTheme.text, fontSize: 11 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area dataKey="rating" stroke="#b0c4de" strokeWidth={2} fill="url(#ac-grad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
+      <div className="panel-pad">
+        <h3 className="font-display font-bold text-lg mb-3">Profile</h3>
+        <DataRow label="Username" value={`@${stats.profile?.username || "—"}`} />
+        <DataRow label="AC Rank" value={stats.acRank?.toLocaleString() || "—"} />
+        <DataRow label="Total Submissions" value={stats.totalSubmissions?.toLocaleString() || "—"} />
+        <DataRow label="Accepted" value={stats.acceptedSubmissions?.toLocaleString() || "—"} />
+      </div>
     </>
   );
 }

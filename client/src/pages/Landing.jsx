@@ -8,7 +8,7 @@ const features = [
   {
     icon: "📊",
     title: "Unified Dashboard",
-    body: "GitHub, LeetCode, Codeforces, GFG, Wakatime, Dev.to — beautifully in one place.",
+    body: "GitHub, LeetCode, Codeforces, GFG, CodeChef, AtCoder, Wakatime — beautifully in one place.",
     color: "#8b5cf6",
   },
   {

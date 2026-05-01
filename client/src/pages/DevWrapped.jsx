@@ -63,13 +63,6 @@ export default function DevWrapped() {
       title: () => `GFG Score: ${stats.gfg?.score ?? 0}`,
       sub: () => `${stats.gfg?.problemsSolved ?? 0} solved · ${stats.gfg?.maxStreak ?? 0}d streak`,
     },
-    {
-      key: "devto",
-      bg: "from-slate-600 via-slate-500 to-slate-400",
-      title: () => `${stats.devto?.articleCount ?? 0} articles published on Dev.to`,
-      sub: () =>
-        `${stats.devto?.totalReactions ?? 0} reactions · ${stats.devto?.totalComments ?? 0} comments`,
-    },
   ];
 
   const slides = candidates.filter((c) => connectedNames.has(c.key));

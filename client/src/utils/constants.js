@@ -62,15 +62,6 @@ export const PLATFORMS = [
     inputLabel: "AtCoder handle",
     needsApiKey: false,
   },
-  {
-    id: "devto",
-    name: "Dev.to",
-    color: "#ffffff",
-    bg: "#0a0a0a",
-    icon: "✍️",
-    inputLabel: "Dev.to username",
-    needsApiKey: false,
-  },
 ];
 
 export const PLATFORM_BY_ID = Object.fromEntries(PLATFORMS.map((p) => [p.id, p]));

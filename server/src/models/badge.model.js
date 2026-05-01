@@ -33,12 +33,6 @@ const BADGES = {
     description: "10+ PRs merged to external repos",
     icon: "🦸",
   },
-  "prolific-writer": {
-    slug: "prolific-writer",
-    name: "Prolific Writer",
-    description: "20+ Dev.to articles published",
-    icon: "✍️",
-  },
 };
 
 function listAll() {

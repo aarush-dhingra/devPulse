@@ -16,7 +16,6 @@ const leetcodeService = require("../services/leetcode.service");
 const gfgService = require("../services/gfg.service");
 const codeforcesService = require("../services/codeforces.service");
 const wakatimeService = require("../services/wakatime.service");
-const devtoService = require("../services/devto.service");
 const codechefService = require("../services/codechef.service");
 const atcoderService = require("../services/atcoder.service");
 
@@ -34,7 +33,6 @@ const FETCHERS = {
   codechef: async (p) => codechefService.fetchAll(p.platform_username),
   atcoder: async (p) => atcoderService.fetchAll(p.platform_username),
   wakatime: async (p) => wakatimeService.fetchAll({ encryptedApiKey: p.api_key }),
-  devto: async (p) => devtoService.fetchAll(p.platform_username),
 };
 
 async function refreshUser(userId) {
@@ -119,10 +117,6 @@ async function evaluateBadges(userId) {
     {
       slug: "open-source-hero",
       met: (stats.github?.contributions?.mergedPRs ?? 0) >= 10,
-    },
-    {
-      slug: "prolific-writer",
-      met: (stats.devto?.articleCount ?? 0) >= 20,
     },
   ];
 

@@ -51,11 +51,10 @@ function buildDays(stats, heatmapData, n = 14) {
   fill(cf.dailySubmissions,        "codeforces");
   fill(wt.dailyHours,              "wakatime", "hours");
 
-  const cc = stats?.codechef || {};
   const ac = stats?.atcoder  || {};
-  fill(cc.dailySubmissions, "codechef");
   fill(ac.dailySubmissions, "atcoder");
 
+  // GFG and CodeChef have no native dailySubmissions — use heatmap breakdown
   if (heatmapData?.heatmap) {
     for (const cell of heatmapData.heatmap) {
       const day = days.find((d) => d.iso === cell.date);
@@ -65,9 +64,6 @@ function buildDays(stats, heatmapData, n = 14) {
       }
       if (cell.breakdown?.codechef > 0) {
         day.segments.codechef = (day.segments.codechef || 0) + Number(cell.breakdown.codechef);
-      }
-      if (cell.breakdown?.atcoder > 0) {
-        day.segments.atcoder = (day.segments.atcoder || 0) + Number(cell.breakdown.atcoder);
       }
     }
   }

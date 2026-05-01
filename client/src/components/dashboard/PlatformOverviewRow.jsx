@@ -110,16 +110,6 @@ function buildCard(platform, data, connected) {
         delta:        deltaPct(spark),
       };
     }
-    case "devto": {
-      return {
-        ...base,
-        primaryLabel: "Posts",
-        primaryValue: formatNumber(data.postsCount ?? data.articles?.length ?? 0),
-        secondary:    data.followersCount ? `${formatNumber(data.followersCount)} followers` : null,
-        spark:        [],
-        delta:        null,
-      };
-    }
     default:
       return null;
   }
@@ -256,7 +246,7 @@ function NotConnectedCard({ card }) {
 /* ─── main ──────────────────────────────────────────────────── */
 
 /* Display priority within each (connected/not-connected) group */
-const PRIORITY = ["leetcode", "github", "codeforces", "gfg", "wakatime", "devto"];
+const PRIORITY = ["leetcode", "github", "codeforces", "codechef", "atcoder", "gfg", "wakatime"];
 
 function isConnected(platform, stats, listedPlatforms) {
   /* "Connected" = present in user's platform list AND has stats data.

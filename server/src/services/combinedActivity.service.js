@@ -146,12 +146,13 @@ async function bucketGfgFromHistory(userId) {
   return m;
 }
 
-function bucketCodechef(stats) {
-  const days = stats?.codechef?.dailySubmissions || [];
+async function bucketCodechefFromHistory(userId) {
+  const history = await statsModel.getHistory(userId, "codechef", 60);
+  if (!history || history.length < 2) return {};
+  const deltas = snapshotDeltas(history, codechefExtractor);
   const m = {};
-  for (const d of days) {
-    if (!d?.date) continue;
-    m[d.date] = (m[d.date] || 0) + Number(d.count || 0);
+  for (const [day, d] of Object.entries(deltas)) {
+    if (d.total > 0) m[day] = d.total;
   }
   return m;
 }
@@ -194,7 +195,10 @@ async function buildHeatmap(userId, days = 365) {
   const dates = windowDates(days);
   const totals = emptyMap(dates);
 
-  const gfgBucket = await bucketGfgFromHistory(userId);
+  const [gfgBucket, codechefBucket] = await Promise.all([
+    bucketGfgFromHistory(userId),
+    bucketCodechefFromHistory(userId),
+  ]);
 
   const sources = {
     github:     bucketGithub(stats),
@@ -202,7 +206,7 @@ async function buildHeatmap(userId, days = 365) {
     codeforces: bucketCodeforces(stats),
     wakatime:   bucketWakatime(stats),
     gfg:        gfgBucket,
-    codechef:   bucketCodechef(stats),
+    codechef:   codechefBucket,
     atcoder:    bucketAtcoder(stats),
   };
 

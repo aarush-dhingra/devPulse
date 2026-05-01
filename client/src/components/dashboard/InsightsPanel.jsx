@@ -17,13 +17,22 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function buildInsights(stats, heatmap) {
   const insights = [];
   const hm = heatmap?.heatmap || [];
-  const lc = stats?.leetcode  || {};
-  const wt = stats?.wakatime  || {};
-  const gh = stats?.github    || {};
+  const lc = stats?.leetcode   || {};
+  const wt = stats?.wakatime   || {};
+  const gh = stats?.github     || {};
+  const cf = stats?.codeforces || {};
+  const cc = stats?.codechef   || {};
+  const ac = stats?.atcoder    || {};
 
-  /* 1. Most-active day of week (problems) */
+  /* 1. Most-active day of week (problems — all platforms) */
   const dowCount = [0, 0, 0, 0, 0, 0, 0];
-  for (const d of (lc.dailySubmissions || [])) {
+  const allDailySubs = [
+    ...(lc.dailySubmissions || []),
+    ...(cf.dailySubmissions || []),
+    ...(cc.dailySubmissions || []),
+    ...(ac.dailySubmissions || []),
+  ];
+  for (const d of allDailySubs) {
     const n = Number(d.count || 0);
     if (n > 0) {
       const dow = new Date(d.date + "T00:00:00Z").getUTCDay();
@@ -140,6 +149,7 @@ function buildInsights(stats, heatmap) {
   /* 6. Problem mix (LeetCode hard ratio) */
   const lcHard   = Number(lc.solved?.hard   || 0);
   const lcTotal  = Number(lc.solved?.total  || 0);
+  const allProblems = lcTotal + Number(cf.uniqueSolved || 0) + Number(cc.problemsSolved || 0) + Number(ac.uniqueSolved || ac.acCount || 0);
   if (lcTotal >= 20) {
     const ratio = (lcHard / lcTotal) * 100;
     if (ratio < 10) {
@@ -183,12 +193,12 @@ function buildInsights(stats, heatmap) {
 
   /* ── Fallback insights — guarantee at least 3 entries shown ── */
   if (insights.length < 3) {
-    if (lcTotal > 0 && !insights.some((i) => i.id.startsWith("diff"))) {
+    if (allProblems > 0 && !insights.some((i) => i.id.startsWith("diff"))) {
       insights.push({
-        id: "lc-total",
+        id: "problems-total",
         icon: "🧩",
         tone: "info",
-        text: `${lcTotal} LeetCode problems solved so far.`,
+        text: `${allProblems.toLocaleString()} problems solved across all platforms.`,
       });
     }
     const ghContribs = Number(gh.contributions?.total || 0);

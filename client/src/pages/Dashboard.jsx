@@ -62,6 +62,8 @@ export default function Dashboard() {
   const wt  = stats.wakatime   || {};
   const cf  = stats.codeforces || {};
   const gfg = stats.gfg        || {};
+  const cc  = stats.codechef   || {};
+  const ac  = stats.atcoder    || {};
 
   /* Period-aware tile metrics — totals are clamped to the visible window
      using the heatmap totals (whose range matches `period`). */
@@ -71,7 +73,9 @@ export default function Dashboard() {
     const totalCommits = sumWindow(gh.contributions?.heatmap, days);
     const totalProblems =
       sumWindow(lc.dailySubmissions, days) +
-      sumWindow(cf.dailySubmissions, days);
+      sumWindow(cf.dailySubmissions, days) +
+      sumWindow(cc.dailySubmissions, days) +
+      sumWindow(ac.dailySubmissions, days);
     const codingHoursWindow = sumWindow(wt.dailyHours, days, "hours");
     const streak = Math.max(
       Number(gh.contributions?.streakCurrent ?? 0),
@@ -87,24 +91,32 @@ export default function Dashboard() {
       streak,
       streakLongest: Number(gh.contributions?.streakLongest ?? 0),
     };
-  }, [gh, lc, wt, cf, gfg, period]);
+  }, [gh, lc, wt, cf, gfg, cc, ac, period]);
 
   /* Sparklines (always last N points so the trend is comparable) */
   const sparks = useMemo(() => {
     const days = Math.min(periodToDays(period), 90);
+    const n = Math.min(days, 30);
+    const lcSpark = sliceLast(lc.dailySubmissions, n);
+    const cfSpark = sliceLast(cf.dailySubmissions, n);
+    const ccSpark = sliceLast(cc.dailySubmissions, n);
+    const acSpark = sliceLast(ac.dailySubmissions, n);
+    const problemSpark = lcSpark.map((v, i) =>
+      v + (cfSpark[i] || 0) + (ccSpark[i] || 0) + (acSpark[i] || 0)
+    );
     return {
-      github:  weekSpark(gh.contributions?.heatmap, days),
-      lc:      sliceLast(lc.dailySubmissions, Math.min(days, 30)),
-      waka:    sliceLast(wt.dailyHours,       Math.min(days, 30), "hours"),
-      streak:  Array.from({ length: 7 }).map((_, i) => {
+      github:   weekSpark(gh.contributions?.heatmap, days),
+      problems: problemSpark,
+      waka:     sliceLast(wt.dailyHours, n, "hours"),
+      streak:   Array.from({ length: 7 }).map((_, i) => {
         const iso = new Date(Date.now() - (6 - i) * 86400000).toISOString().slice(0, 10);
         return Number((gh.contributions?.heatmap || []).find((d) => d.date === iso)?.count || 0);
       }),
     };
-  }, [gh, lc, wt, period]);
+  }, [gh, lc, wt, cf, cc, ac, period]);
 
   const deltas = useMemo(() => ({
-    problems: trendPct(sparks.lc),
+    problems: trendPct(sparks.problems),
     commits:  trendPct(sparks.github),
     coding:   trendPct(sparks.waka),
   }), [sparks]);
@@ -156,7 +168,7 @@ export default function Dashboard() {
           icon={<PlatformLogo platform="leetcode" size={12} />}
           accent="#ffa116"
           to="/dashboard/leetcode"
-          spark={sparks.lc}
+          spark={sparks.problems}
           platform="leetcode"
           delta={deltas.problems}
           deltaLabel={periodSubLabel}

@@ -34,24 +34,35 @@ function computeScore(stats) {
   const wt  = stats?.wakatime   || {};
   const cf  = stats?.codeforces || {};
   const gfg = stats?.gfg        || {};
+  const cc  = stats?.codechef   || {};
+  const ac  = stats?.atcoder    || {};
+
+  const dayCount = (arr, iso) => Number((arr || []).find((d) => d.date === iso)?.count || 0);
+  const dayHours = (arr, iso) => Number((arr || []).find((d) => d.date === iso)?.hours || 0);
 
   /* Today's raw values */
-  const todayCodingH  = Number((wt.dailyHours        || []).find((d) => d.date === todayIso)?.hours || 0);
-  const todayLC       = Number((lc.dailySubmissions  || []).find((d) => d.date === todayIso)?.count || 0);
-  const todayCF       = Number((cf.dailySubmissions  || []).find((d) => d.date === todayIso)?.count || 0);
-  const todayProblems = todayLC + todayCF;
-  const todayCommits  = Number((gh.contributions?.heatmap || []).find((d) => d.date === todayIso)?.count || 0);
+  const todayCodingH  = dayHours(wt.dailyHours, todayIso);
+  const todayProblems = dayCount(lc.dailySubmissions, todayIso)
+                      + dayCount(cf.dailySubmissions, todayIso)
+                      + dayCount(cc.dailySubmissions, todayIso)
+                      + dayCount(ac.dailySubmissions, todayIso);
+  const todayCommits  = dayCount(gh.contributions?.heatmap, todayIso);
 
   /* Yesterday's raw values for delta */
-  const yCodingH  = Number((wt.dailyHours        || []).find((d) => d.date === yesterdayIso)?.hours || 0);
-  const yLC       = Number((lc.dailySubmissions  || []).find((d) => d.date === yesterdayIso)?.count || 0);
-  const yCF       = Number((cf.dailySubmissions  || []).find((d) => d.date === yesterdayIso)?.count || 0);
-  const yProblems = yLC + yCF;
-  const yCommits  = Number((gh.contributions?.heatmap || []).find((d) => d.date === yesterdayIso)?.count || 0);
+  const yCodingH  = dayHours(wt.dailyHours, yesterdayIso);
+  const yProblems = dayCount(lc.dailySubmissions, yesterdayIso)
+                  + dayCount(cf.dailySubmissions, yesterdayIso)
+                  + dayCount(cc.dailySubmissions, yesterdayIso)
+                  + dayCount(ac.dailySubmissions, yesterdayIso);
+  const yCommits  = dayCount(gh.contributions?.heatmap, yesterdayIso);
 
   /* Score (0–100) */
   const dailyAvgCoding = Number(wt.dailyAverageHours || 0);
-  const allSolved      = Number(lc.solved?.total || 0) + Number(cf.uniqueSolved || 0) + Number(gfg.problemsSolved || 0);
+  const allSolved      = Number(lc.solved?.total || 0)
+                       + Number(cf.uniqueSolved || 0)
+                       + Number(gfg.problemsSolved || 0)
+                       + Number(cc.problemsSolved || 0)
+                       + Number(ac.uniqueSolved || ac.acCount || 0);
   const dailyAvgProbs  = allSolved > 0 ? Math.max(1, Math.round(allSolved / 90)) : 2;
   const streak         = Math.max(Number(gh.contributions?.streakCurrent || 0), Number(gfg.streak || 0));
 

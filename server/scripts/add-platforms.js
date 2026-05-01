@@ -8,7 +8,7 @@ async function main() {
   );
   await pool.query(
     `ALTER TABLE platforms ADD CONSTRAINT platforms_platform_name_check
-     CHECK (platform_name IN ('github','leetcode','gfg','codeforces','codechef','atcoder','wakatime','devto'))`
+     CHECK (platform_name IN ('github','leetcode','gfg','codeforces','codechef','atcoder','wakatime'))`
   );
   console.log("platforms CHECK constraint updated — codechef + atcoder added");
   await pool.end();

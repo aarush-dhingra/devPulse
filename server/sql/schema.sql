@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS platforms (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   platform_name     TEXT NOT NULL CHECK (platform_name IN
-    ('github','leetcode','gfg','codeforces','codechef','atcoder','wakatime','devto')),
+    ('github','leetcode','gfg','codeforces','codechef','atcoder','wakatime')),
   platform_username TEXT NOT NULL,
   api_key           TEXT,                       -- AES-256 ciphertext (Wakatime)
   status            TEXT NOT NULL DEFAULT 'pending'

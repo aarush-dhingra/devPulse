@@ -15,7 +15,6 @@ const items = [
   { to: "/dashboard/codechef",   label: "CodeChef",      icon: PlatformIcon("codechef")   },
   { to: "/dashboard/atcoder",    label: "AtCoder",       icon: PlatformIcon("atcoder")    },
   { to: "/dashboard/wakatime",   label: "Wakatime",      icon: PlatformIcon("wakatime")   },
-  { to: "/dashboard/devto",      label: "Dev.to",        icon: PlatformIcon("devto")      },
   { to: ROUTES.leaderboard, label: "Leaderboard", icon: TrophyIcon, divider: true },
   { to: ROUTES.community,   label: "Community",   icon: GlobeIcon  },
   { to: ROUTES.wrapped,     label: "Wrapped",     icon: GiftIcon   },
