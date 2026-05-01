@@ -141,7 +141,16 @@ export default function Dashboard() {
   }
 
   if (platform) {
-    return <PlatformDetail platform={platform} data={data} />;
+    return (
+      <PlatformDetail
+        platform={platform}
+        data={data}
+        heatmap={heatmap}
+        series={series}
+        period={period}
+        onPeriodChange={setPeriod}
+      />
+    );
   }
 
   const codH = tileMetrics.codingHoursDisplay.hours;
