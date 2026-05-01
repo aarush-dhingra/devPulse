@@ -179,7 +179,7 @@ function TaskRow({ task, onRemove, onToggleManual }) {
 
   return (
     <div
-      className="relative group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-all duration-300"
+      className="relative group flex items-center gap-2.5 rounded-lg border px-3 py-2 transition-all duration-300"
       style={{
         borderColor: isDone ? `${meta.accentColor}40` : "rgba(255,255,255,0.06)",
         background:  isDone ? `${meta.accentColor}08` : "rgba(255,255,255,0.02)",
@@ -209,7 +209,7 @@ function TaskRow({ task, onRemove, onToggleManual }) {
         </div>
 
         {/* Progress bar */}
-        <div className="mt-1.5 flex items-center gap-2">
+        <div className="mt-1 flex items-center gap-2">
           <div className="flex-1 h-1 rounded-full bg-white/[0.06] overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-700"
@@ -299,7 +299,7 @@ export default function SmartTasks({ stats }) {
   };
 
   return (
-    <div className="flex flex-col gap-2 min-w-0 flex-1">
+    <div className="flex flex-col gap-1.5 min-w-0 flex-1">
       {/* Summary */}
       <SummaryBar summary={summary} />
 
@@ -315,9 +315,9 @@ export default function SmartTasks({ stats }) {
         ))}
 
         {tasks.length === 0 && (
-          <div className="text-center py-6 px-3 rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02]">
-            <div className="text-3xl opacity-50">🗂️</div>
-            <p className="text-[12px] font-medium text-ink-muted mt-1.5">No tasks yet</p>
+          <div className="text-center py-4 px-3 rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02]">
+            <div className="text-2xl opacity-50">🗂️</div>
+            <p className="text-[12px] font-medium text-ink-muted mt-1">No tasks yet</p>
             <p className="text-[10px] text-ink-faint mt-0.5">
               Add your first goal — auto-tracked from your connected platforms.
             </p>
@@ -328,7 +328,7 @@ export default function SmartTasks({ stats }) {
       {/* Add button */}
       <button
         onClick={() => setModalOpen(true)}
-        className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/[0.12] py-2 text-[11px] text-ink-faint hover:text-accent-300 hover:border-accent-500/30 transition-all duration-200"
+        className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/[0.12] py-1.5 text-[11px] text-ink-faint hover:text-accent-300 hover:border-accent-500/30 transition-all duration-200"
       >
         <span className="text-base leading-none">+</span>
         Add Task

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useStats } from "../hooks/useStats";
-import { useAuth } from "../hooks/useAuth";
 
 import StatTile from "../components/dashboard/StatTile";
 import TodayFocus from "../components/dashboard/TodayFocus";
@@ -28,7 +27,6 @@ import { dashboardApi } from "../api/dashboard.api";
 
 export default function Dashboard() {
   const { platform } = useParams();
-  const { user } = useAuth();
   const { data, loading, error, refresh } = useStats();
 
   /* Centralized date range — every section consumes this */
@@ -65,17 +63,19 @@ export default function Dashboard() {
   const cc  = stats.codechef   || {};
   const ac  = stats.atcoder    || {};
 
-  /* Period-aware tile metrics — totals are clamped to the visible window
-     using the heatmap totals (whose range matches `period`). */
+  /* Dashboard headline metrics. "Problems Solved" is a lifetime solved
+     count, matching each platform detail page. Period activity lives in
+     the heatmap/charts below. */
   const tileMetrics = useMemo(() => {
     const days = periodToDays(period);
 
     const totalCommits = sumWindow(gh.contributions?.heatmap, days);
     const totalProblems =
-      sumWindow(lc.dailySubmissions, days) +
-      sumWindow(cf.dailySubmissions, days) +
-      sumWindow(cc.dailySubmissions, days) +
-      sumWindow(ac.dailySubmissions, days);
+      Number(lc.solved?.total || 0) +
+      Number(cf.uniqueSolved || 0) +
+      Number(gfg.problemsSolved || 0) +
+      Number(cc.problemsSolved || 0) +
+      Number(ac.uniqueSolved || ac.acCount || 0);
     const codingHoursWindow = sumWindow(wt.dailyHours, days, "hours");
     const streak = Math.max(
       Number(gh.contributions?.streakCurrent ?? 0),
@@ -97,13 +97,9 @@ export default function Dashboard() {
   const sparks = useMemo(() => {
     const days = Math.min(periodToDays(period), 90);
     const n = Math.min(days, 30);
-    const lcSpark = sliceLast(lc.dailySubmissions, n);
-    const cfSpark = sliceLast(cf.dailySubmissions, n);
-    const ccSpark = sliceLast(cc.dailySubmissions, n);
-    const acSpark = sliceLast(ac.dailySubmissions, n);
-    const problemSpark = lcSpark.map((v, i) =>
-      v + (cfSpark[i] || 0) + (ccSpark[i] || 0) + (acSpark[i] || 0)
-    );
+    const problemSpark = Array.isArray(series?.problems) && series.problems.length
+      ? series.problems.slice(-n).map((d) => Number(d.total || 0))
+      : [];
     return {
       github:   weekSpark(gh.contributions?.heatmap, days),
       problems: problemSpark,
@@ -113,7 +109,7 @@ export default function Dashboard() {
         return Number((gh.contributions?.heatmap || []).find((d) => d.date === iso)?.count || 0);
       }),
     };
-  }, [gh, lc, wt, cf, cc, ac, period]);
+  }, [gh, lc, wt, period, series]);
 
   const deltas = useMemo(() => ({
     problems: trendPct(sparks.problems),
@@ -145,7 +141,16 @@ export default function Dashboard() {
   }
 
   if (platform) {
-    return <PlatformDetail platform={platform} data={data} />;
+    return (
+      <PlatformDetail
+        platform={platform}
+        data={data}
+        heatmap={heatmap}
+        series={series}
+        period={period}
+        onPeriodChange={setPeriod}
+      />
+    );
   }
 
   const codH = tileMetrics.codingHoursDisplay.hours;
@@ -155,7 +160,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-5 stagger-fade">
       {/* ── Hero (Today's Score + Tasks) ── */}
-      <TodayFocus user={user} stats={stats} />
+      <TodayFocus stats={stats} />
 
       {/* ── Centralized date filter — drives every section below ── */}
       <DateRangeBar period={period} onChange={setPeriod} />
@@ -171,10 +176,10 @@ export default function Dashboard() {
           spark={sparks.problems}
           platform="leetcode"
           delta={deltas.problems}
-          deltaLabel={periodSubLabel}
+          deltaLabel="recent activity"
         />
         <StatTile
-          label="Commits"
+          label="Contributions"
           value={tileMetrics.totalCommits}
           icon={<PlatformLogo platform="github" size={12} />}
           accent="#e6edf3"

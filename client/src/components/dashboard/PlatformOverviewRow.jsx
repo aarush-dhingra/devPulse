@@ -44,11 +44,13 @@ function buildCard(platform, data, connected) {
     }
     case "github": {
       const spark = weekSeries(data.contributions?.heatmap);
+      const contributions = Number(data.contributions?.total || 0);
+      const searchedCommits = Number(data.commits?.totalSearched || 0);
       return {
         ...base,
-        primaryLabel: "Commits",
-        primaryValue: formatNumber(data.commits?.totalSearched ?? data.contributions?.total ?? 0),
-        secondary:    `PRs ${formatNumber(data.contributions?.mergedPRs ?? 0)}`,
+        primaryLabel: "Contributions",
+        primaryValue: formatNumber(contributions || searchedCommits),
+        secondary:    `Commits ${formatNumber(searchedCommits)} · PRs ${formatNumber(data.contributions?.mergedPRs ?? 0)}`,
         spark,
         delta:        deltaPct(spark),
       };

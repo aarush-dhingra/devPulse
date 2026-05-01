@@ -5,6 +5,7 @@ const statsModel = require("../models/stats.model");
 const { encrypt } = require("../utils/crypto");
 const { queueRefreshUser } = require("../jobs/queue");
 const { HttpError } = require("../middlewares/error.middleware");
+const { assertUsableSnapshot } = require("../services/platformQuality.service");
 const logger = require("../utils/logger");
 
 const githubService = require("../services/github.service");
@@ -14,6 +15,13 @@ const codeforcesService = require("../services/codeforces.service");
 const wakatimeService = require("../services/wakatime.service");
 const codechefService = require("../services/codechef.service");
 const atcoderService = require("../services/atcoder.service");
+
+function normalizeBeforeSave(platform, data) {
+  if (platform === "gfg" || platform === "codechef") {
+    return assertUsableSnapshot(platform, data);
+  }
+  return data;
+}
 
 async function preflightFetch(platform, username, apiKey) {
   switch (platform) {
@@ -85,10 +93,11 @@ async function connectPlatform(req, res, next) {
 
     if (preflighted) {
       try {
+        const rawData = normalizeBeforeSave(platform, preflighted);
         await statsModel.saveSnapshot({
           userId: req.user.id,
           platform,
-          rawData: preflighted,
+          rawData,
         });
         await platformModel.updateStatus(req.user.id, platform, "connected");
       } catch (err) {

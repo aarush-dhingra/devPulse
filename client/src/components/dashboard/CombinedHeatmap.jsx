@@ -1,7 +1,7 @@
 /**
  * CombinedHeatmap — full-width yearly activity heatmap. Aggregates GitHub
- * contributions, LeetCode/Codeforces submissions, and WakaTime hours into
- * a single intensity grid. Renders as a responsive SVG that scales to its
+ * contributions, accepted-submission calendars, verified snapshot deltas,
+ * and WakaTime hours into a single intensity grid. Renders as a responsive SVG that scales to its
  * container width. Includes month + weekday labels, a Best Day / Longest
  * Streak / Active Days stats strip, a per-platform legend with totals,
  * and a floating tooltip with full breakdown on hover.
@@ -25,11 +25,11 @@ const RAMP = [
 
 const PLATFORM_META = {
   github:     { id: "github",     label: "GitHub",        color: "#f0f6fc", unit: "contributions" },
-  leetcode:   { id: "leetcode",   label: "LeetCode",      color: "#ffa116", unit: "submissions"   },
-  codeforces: { id: "codeforces", label: "Codeforces",    color: "#fe646f", unit: "submissions"   },
-  gfg:        { id: "gfg",        label: "GeeksForGeeks", color: "#2f8d46", unit: "problems"      },
-  codechef:   { id: "codechef",   label: "CodeChef",      color: "#5b4638", unit: "problems"      },
-  atcoder:    { id: "atcoder",    label: "AtCoder",       color: "#b0c4de", unit: "problems"      },
+  leetcode:   { id: "leetcode",   label: "LeetCode",      color: "#ffa116", unit: "accepted submissions" },
+  codeforces: { id: "codeforces", label: "Codeforces",    color: "#fe646f", unit: "accepted submissions" },
+  gfg:        { id: "gfg",        label: "GeeksForGeeks", color: "#2f8d46", unit: "verified activity"    },
+  codechef:   { id: "codechef",   label: "CodeChef",      color: "#5b4638", unit: "verified activity"    },
+  atcoder:    { id: "atcoder",    label: "AtCoder",       color: "#b0c4de", unit: "accepted submissions" },
   wakatime:   { id: "wakatime",   label: "Wakatime",      color: "#22d3ee", unit: "hours"         },
 };
 
@@ -140,7 +140,11 @@ export default function CombinedHeatmap({ data, period = "1y" }) {
   const handleLeave = () => setHover(null);
 
   return (
-    <div className="panel-pad relative" ref={containerRef}>
+    <div
+      className="panel-pad relative"
+      ref={containerRef}
+      style={{ overflow: "visible" }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -159,7 +163,7 @@ export default function CombinedHeatmap({ data, period = "1y" }) {
       </div>
 
       {/* Heatmap SVG — scales to full container width */}
-      <div className="overflow-hidden" onMouseLeave={handleLeave}>
+      <div className="overflow-x-hidden overflow-y-visible" onMouseLeave={handleLeave}>
         <svg
           viewBox={`0 0 ${svgW} ${svgH}`}
           width="100%"
@@ -255,7 +259,7 @@ export default function CombinedHeatmap({ data, period = "1y" }) {
                   <PlatformLogo platform={k} size={12} color={meta.color} />
                   <span className="text-ink-muted">{meta.label}:</span>
                   <span className="text-ink tabular-nums font-medium">
-                    {k === "wakatime" ? `${Number(v).toFixed(1)}h` : Math.round(Number(v)).toLocaleString()}
+                    {fmtPlatformValue(k, v)}
                   </span>
                 </span>
               );
