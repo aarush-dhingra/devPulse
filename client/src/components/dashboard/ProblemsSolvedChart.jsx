@@ -1,12 +1,9 @@
 /**
  * ProblemsSolvedChart — daily/weekly stacked bars (Easy/Medium/Hard)
- * with an overlay "Total" line. Platform filter restricts which sources
- * are aggregated into the buckets.
+ * with an overlay "Total" line.
  *
- * Difficulty classification:
- *   • LeetCode count   → split by the user's overall easy/medium/hard ratio
- *   • GFG count        → all "Easy"
- *   • Codeforces count → all "Hard"
+ * The server provides exact per-difficulty counts via snapshot deltas,
+ * so no client-side approximation is needed.
  */
 import { useMemo, useState } from "react";
 import {
@@ -23,13 +20,6 @@ import {
 } from "recharts";
 import { Link } from "react-router-dom";
 import { chartTheme } from "../../utils/chartConfigs";
-
-const PLATFORMS = [
-  { id: "all",        label: "All Platforms" },
-  { id: "leetcode",   label: "LeetCode" },
-  { id: "codeforces", label: "Codeforces" },
-  { id: "gfg",        label: "GFG" },
-];
 
 const DIFF_META = {
   easy:   { color: "#22c55e", label: "Easy" },
@@ -49,15 +39,6 @@ function shortDate(d, weekly = false) {
   return new Date(d + "T00:00:00Z").toLocaleDateString(undefined, {
     month: "short", day: weekly ? undefined : "numeric",
   });
-}
-
-/* Split a LeetCode count into easy/medium/hard using the user's ratio */
-function splitLeetCode(count, ratio) {
-  if (count <= 0) return { easy: 0, medium: 0, hard: 0 };
-  const easy   = Math.round(count * ratio.easy);
-  const medium = Math.round(count * ratio.medium);
-  const hard   = Math.max(0, count - easy - medium); /* keep total exact */
-  return { easy, medium, hard };
 }
 
 /* ─── tooltip ───────────────────────────────────────────────── */
@@ -96,48 +77,26 @@ function CustomTooltip({ active, payload, label }) {
 
 /* ─── main ──────────────────────────────────────────────────── */
 
-export default function ProblemsSolvedChart({ series = [], stats = {}, period = "90d" }) {
-  const [platformFilter, setPlatformFilter] = useState("all");
-  const [viewMode,       setViewMode]       = useState("daily");
+export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
+  const [viewMode, setViewMode] = useState("daily");
 
-  /* Derive LC easy/med/hard ratio from stats totals */
-  const lc       = stats?.leetcode || {};
-  const lcEasy   = Number(lc.solved?.easy   || 0);
-  const lcMedium = Number(lc.solved?.medium || 0);
-  const lcHard   = Number(lc.solved?.hard   || 0);
-  const lcTotal  = lcEasy + lcMedium + lcHard;
-  const lcRatio  = lcTotal > 0
-    ? { easy: lcEasy / lcTotal, medium: lcMedium / lcTotal, hard: lcHard / lcTotal }
-    : { easy: 0.45, medium: 0.45, hard: 0.10 };
-
-  /* Build daily entries: { date, easy, medium, hard, total } */
   const dailyData = useMemo(() => {
-    return (series || []).map((d) => {
-      const includeLC  = platformFilter === "all" || platformFilter === "leetcode";
-      const includeCF  = platformFilter === "all" || platformFilter === "codeforces";
-      const includeGFG = platformFilter === "all" || platformFilter === "gfg";
+    return (series || []).map((d) => ({
+      date:   d.date,
+      easy:   Number(d.easy   || 0),
+      medium: Number(d.medium || 0),
+      hard:   Number(d.hard   || 0),
+      total:  Number(d.total  || 0),
+    }));
+  }, [series]);
 
-      const lcCount = includeLC  ? Number(d.leetcode   || 0) : 0;
-      const cfCount = includeCF  ? Number(d.codeforces || 0) : 0;
-      const gfgCnt  = includeGFG ? Number(d.gfg        || 0) : 0;
-
-      const lcSplit = splitLeetCode(lcCount, lcRatio);
-      const easy   = lcSplit.easy   + gfgCnt;
-      const medium = lcSplit.medium;
-      const hard   = lcSplit.hard   + cfCount;
-      const total  = easy + medium + hard;
-      return { date: d.date, easy, medium, hard, total };
-    });
-  }, [series, platformFilter, lcRatio]);
-
-  /* Roll up to weekly buckets if needed */
   const chartData = useMemo(() => {
     if (viewMode !== "weekly") return dailyData;
     const buckets = {};
     for (const d of dailyData) {
       const dt  = new Date(d.date + "T00:00:00Z");
       const mon = new Date(dt);
-      mon.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7)); /* Monday */
+      mon.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
       const key = mon.toISOString().slice(0, 10);
       if (!buckets[key]) buckets[key] = { date: key, easy: 0, medium: 0, hard: 0, total: 0 };
       buckets[key].easy   += d.easy;
@@ -152,13 +111,11 @@ export default function ProblemsSolvedChart({ series = [], stats = {}, period = 
   const hasData    = grandTotal > 0;
   const periodLbl  = viewMode === "weekly" ? "weekly" : `last ${period}`;
 
-  /* Difficulty totals strip */
   const diffTotals = chartData.reduce(
     (acc, d) => ({ easy: acc.easy + d.easy, medium: acc.medium + d.medium, hard: acc.hard + d.hard }),
     { easy: 0, medium: 0, hard: 0 }
   );
 
-  /* Best day (max total) and zero-activity days for markers */
   const { bestDay, zeroDays } = useMemo(() => {
     if (!chartData.length) return { bestDay: null, zeroDays: [] };
     let best = chartData[0];
@@ -182,7 +139,6 @@ export default function ProblemsSolvedChart({ series = [], stats = {}, period = 
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* View toggle */}
           <div className="flex items-center gap-0.5 rounded-full bg-white/[0.04] p-0.5">
             {VIEW.map((v) => (
               <button
@@ -198,17 +154,6 @@ export default function ProblemsSolvedChart({ series = [], stats = {}, period = 
               </button>
             ))}
           </div>
-
-          {/* Platform selector */}
-          <select
-            value={platformFilter}
-            onChange={(e) => setPlatformFilter(e.target.value)}
-            className="bg-white/[0.04] border border-white/10 rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-ink-muted focus:outline-none hover:text-ink transition"
-          >
-            {PLATFORMS.map((p) => (
-              <option key={p.id} value={p.id} className="bg-black uppercase">{p.label}</option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -240,7 +185,7 @@ export default function ProblemsSolvedChart({ series = [], stats = {}, period = 
           <div className="text-3xl opacity-40">📈</div>
           <p className="text-sm font-medium text-ink-muted">No problem-solving data yet</p>
           <p className="text-[11px] text-ink-faint max-w-[220px]">
-            Connect <strong>LeetCode</strong>, <strong>Codeforces</strong>, or <strong>GFG</strong> to plot daily problem activity
+            Solve problems on <strong>LeetCode</strong>, <strong>Codeforces</strong>, or <strong>GFG</strong> then hit Refresh to see your progress
           </p>
           <Link to="/settings" className="text-[11px] text-accent-300 hover:underline">
             → Connect platforms
@@ -274,11 +219,9 @@ export default function ProblemsSolvedChart({ series = [], stats = {}, period = 
                 iconType="square"
                 wrapperStyle={{ fontSize: 10, color: chartTheme.text, paddingBottom: 4 }}
               />
-              {/* Stacked bars — solid colours, thicker */}
               <Bar dataKey="easy"   stackId="d" name="Easy"   fill={DIFF_META.easy.color}   maxBarSize={28} />
               <Bar dataKey="medium" stackId="d" name="Medium" fill={DIFF_META.medium.color} maxBarSize={28} />
               <Bar dataKey="hard"   stackId="d" name="Hard"   fill={DIFF_META.hard.color}   maxBarSize={28} radius={[4, 4, 0, 0]} />
-              {/* Subtle total overlay */}
               <Line
                 type="monotone"
                 dataKey="total"
@@ -291,7 +234,6 @@ export default function ProblemsSolvedChart({ series = [], stats = {}, period = 
                 activeDot={{ r: 3.5, fill: TOTAL_COLOR, stroke: "#000", strokeWidth: 1 }}
                 isAnimationActive
               />
-              {/* Best-day star marker */}
               {bestDay && (
                 <ReferenceDot
                   x={bestDay.date}
@@ -315,7 +257,6 @@ export default function ProblemsSolvedChart({ series = [], stats = {}, period = 
                   )}
                 />
               )}
-              {/* Zero-activity markers — small grey dots on x axis */}
               {zeroDays.slice(0, 60).map((z) => (
                 <ReferenceDot
                   key={`z-${z.date}`}

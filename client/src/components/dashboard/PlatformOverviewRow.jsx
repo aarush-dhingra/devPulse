@@ -1,27 +1,29 @@
 /**
- * PlatformOverviewRow — horizontal row of platform cards.
+ * PlatformOverviewRow — horizontal grid of platform cards.
  *
- * Each card: brand logo + name, key stat, mini sparkline, % delta.
- * 4 cards side-by-side (LeetCode, GitHub, Codeforces, WakaTime).
+ * Connected platforms (with a green dot) are rendered first, sorted by
+ * priority. Not-connected platforms follow with a "Connect" CTA. All
+ * supported platforms are always displayed so the user can see what
+ * else is available.
  */
 import { Link } from "react-router-dom";
 import Sparkline from "./Sparkline";
 import PlatformLogo from "../ui/PlatformLogo";
-import { PLATFORM_BY_ID } from "../../utils/constants";
+import { PLATFORM_BY_ID, PLATFORMS } from "../../utils/constants";
 import { formatNumber } from "../../utils/formatters";
 
 /* ─── per-platform builders ─────────────────────────────────── */
 
-function buildCard(platform, data) {
+function buildCard(platform, data, connected) {
   const meta = PLATFORM_BY_ID[platform];
   if (!meta) return null;
 
   const base = {
-    id: platform,
-    name: meta.name,
-    color: meta.color,
-    href: `/dashboard/${platform}`,
-    connected: !!data,
+    id:        platform,
+    name:      meta.name,
+    color:     meta.color,
+    href:      `/dashboard/${platform}`,
+    connected,
   };
 
   if (!data) {
@@ -35,9 +37,9 @@ function buildCard(platform, data) {
         ...base,
         primaryLabel: "Solved",
         primaryValue: formatNumber(data.solved?.total ?? 0),
-        secondary: data.rating ? `Rating ${formatNumber(data.rating)}` : null,
+        secondary:    data.rating ? `Rating ${formatNumber(data.rating)}` : null,
         spark,
-        delta: deltaPct(spark),
+        delta:        deltaPct(spark),
       };
     }
     case "github": {
@@ -46,9 +48,9 @@ function buildCard(platform, data) {
         ...base,
         primaryLabel: "Commits",
         primaryValue: formatNumber(data.commits?.totalSearched ?? data.contributions?.total ?? 0),
-        secondary: `PRs ${formatNumber(data.contributions?.mergedPRs ?? 0)}`,
+        secondary:    `PRs ${formatNumber(data.contributions?.mergedPRs ?? 0)}`,
         spark,
-        delta: deltaPct(spark),
+        delta:        deltaPct(spark),
       };
     }
     case "codeforces": {
@@ -57,23 +59,43 @@ function buildCard(platform, data) {
         ...base,
         primaryLabel: "Solved",
         primaryValue: formatNumber(data.uniqueSolved ?? 0),
-        secondary: data.rating ? `Rating ${formatNumber(data.rating)}` : null,
+        secondary:    data.rating ? `Rating ${formatNumber(data.rating)}` : null,
         spark,
-        delta: deltaPct(spark),
+        delta:        deltaPct(spark),
+      };
+    }
+    case "gfg": {
+      return {
+        ...base,
+        primaryLabel: "Solved",
+        primaryValue: formatNumber(data.problemsSolved ?? 0),
+        secondary:    Number(data.streak) > 0 ? `Streak ${data.streak}d` : null,
+        spark:        [],
+        delta:        null,
       };
     }
     case "wakatime": {
-      const spark = (data.dailyHours || []).slice(-14).map((d) => d.hours || 0);
+      const spark      = (data.dailyHours || []).slice(-14).map((d) => d.hours || 0);
       const totalHours = Math.round(data.hoursLast30Days ?? 0);
-      const h = Math.floor(totalHours);
-      const m = Math.round(((data.hoursLast30Days ?? 0) - h) * 60);
+      const h          = Math.floor(totalHours);
+      const m          = Math.round(((data.hoursLast30Days ?? 0) - h) * 60);
       return {
         ...base,
         primaryLabel: "Time",
         primaryValue: `${h}h ${m}m`,
-        secondary: "This 30 days",
+        secondary:    "Last 30 days",
         spark,
-        delta: deltaPct(spark),
+        delta:        deltaPct(spark),
+      };
+    }
+    case "devto": {
+      return {
+        ...base,
+        primaryLabel: "Posts",
+        primaryValue: formatNumber(data.postsCount ?? data.articles?.length ?? 0),
+        secondary:    data.followersCount ? `${formatNumber(data.followersCount)} followers` : null,
+        spark:        [],
+        delta:        null,
       };
     }
     default:
@@ -85,11 +107,11 @@ function buildCard(platform, data) {
 
 function deltaPct(spark) {
   if (!spark || spark.length < 2) return null;
-  const half = Math.max(1, Math.floor(spark.length / 2));
+  const half   = Math.max(1, Math.floor(spark.length / 2));
   const recent = spark.slice(-half);
   const older  = spark.slice(0, half);
-  const sumR = recent.reduce((s, v) => s + (v || 0), 0);
-  const sumO = older .reduce((s, v) => s + (v || 0), 0);
+  const sumR   = recent.reduce((s, v) => s + (v || 0), 0);
+  const sumO   = older .reduce((s, v) => s + (v || 0), 0);
   if (!sumO) return sumR > 0 ? 100 : null;
   return ((sumR - sumO) / sumO) * 100;
 }
@@ -118,24 +140,19 @@ function ConnectedCard({ card }) {
     <Link
       to={card.href}
       className="group flex items-center gap-3 panel rounded-xl p-3 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-px"
-      style={{
-        boxShadow: `0 0 0 0 ${card.color}00`,
-      }}
       onMouseEnter={(e) => { e.currentTarget.style.boxShadow = `0 0 0 1px ${card.color}40, 0 0 24px ${card.color}25, 0 4px 16px rgba(0,0,0,0.4)`; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = ""; }}
     >
-      {/* Brand logo */}
       <div
         className="w-10 h-10 rounded-xl grid place-items-center shrink-0 transition-all duration-200 group-hover:scale-110"
         style={{
           background: `${card.color}12`,
-          boxShadow: `0 0 12px ${card.color}22, inset 0 0 0 1px ${card.color}30`,
+          boxShadow:  `0 0 12px ${card.color}22, inset 0 0 0 1px ${card.color}30`,
         }}
       >
         <PlatformLogo platform={card.id} size={20} brand color={card.color} />
       </div>
 
-      {/* Name + primary metric */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-[12px] font-semibold text-ink truncate">{card.name}</span>
@@ -154,7 +171,6 @@ function ConnectedCard({ card }) {
         )}
       </div>
 
-      {/* Sparkline + delta */}
       <div className="flex flex-col items-end gap-1 shrink-0">
         {card.spark?.length > 1 && (
           <Sparkline values={card.spark} color={card.color} width={64} height={22} />
@@ -182,7 +198,6 @@ function NotConnectedCard({ card }) {
                  border border-dashed border-white/[0.08] bg-white/[0.015]
                  hover:border-white/15"
     >
-      {/* Greyed logo */}
       <div
         className="w-10 h-10 rounded-xl grid place-items-center shrink-0 opacity-40 transition-opacity group-hover:opacity-70"
         style={{ background: "rgba(255,255,255,0.03)", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)" }}
@@ -190,20 +205,24 @@ function NotConnectedCard({ card }) {
         <PlatformLogo platform={card.id} size={20} brand color="#94a3b8" />
       </div>
 
-      {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-semibold text-ink-muted truncate">{card.name}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[12px] font-semibold text-ink-muted truncate">{card.name}</span>
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0 bg-white/20"
+            title="Not connected"
+          />
+        </div>
         <div className="text-[10px] text-ink-faint mt-0.5">Not connected</div>
       </div>
 
-      {/* Connect CTA */}
       <span
         className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg
                    border transition-all duration-200"
         style={{
-          color: card.color,
+          color:       card.color,
           borderColor: `${card.color}40`,
-          background: `${card.color}10`,
+          background:  `${card.color}10`,
         }}
       >
         Connect →
@@ -214,15 +233,44 @@ function NotConnectedCard({ card }) {
 
 /* ─── main ──────────────────────────────────────────────────── */
 
-const PRIORITY = ["leetcode", "github", "codeforces", "wakatime"];
+/* Display priority within each (connected/not-connected) group */
+const PRIORITY = ["leetcode", "github", "codeforces", "gfg", "wakatime", "devto"];
+
+function isConnected(platform, stats, listedPlatforms) {
+  /* "Connected" = present in user's platform list AND has stats data.
+     We also accept platforms that are listed even if stats haven't been
+     synced yet, so newly-connected accounts still show up. */
+  if (listedPlatforms.has(platform)) return true;
+  if (stats[platform] && Object.keys(stats[platform]).length > 0) return true;
+  return false;
+}
 
 export default function PlatformOverviewRow({ stats = {}, platforms = [] }) {
-  const connected = new Set((platforms || []).map((p) => p.platform_name));
-  const cards = PRIORITY
-    .map((id) => buildCard(id, connected.has(id) ? stats[id] : null))
+  const listed = new Set(
+    (platforms || [])
+      .map((p) => p.platform_name || p.platform || p.id)
+      .filter(Boolean)
+  );
+
+  /* Build a card for every supported platform, then sort:
+     1. Connected platforms (in PRIORITY order)
+     2. Not-connected platforms (in PRIORITY order) */
+  const all = PLATFORMS
+    .map((p) => p.id)
+    .filter((id) => PRIORITY.includes(id))
+    .sort((a, b) => PRIORITY.indexOf(a) - PRIORITY.indexOf(b))
+    .map((id) => {
+      const connected = isConnected(id, stats, listed);
+      return buildCard(id, connected ? stats[id] : null, connected);
+    })
     .filter(Boolean);
 
-  if (!cards.length) return null;
+  const sorted = [
+    ...all.filter((c) => c.connected),
+    ...all.filter((c) => !c.connected),
+  ];
+
+  if (!sorted.length) return null;
 
   return (
     <div className="panel-pad">
@@ -233,8 +281,8 @@ export default function PlatformOverviewRow({ stats = {}, platforms = [] }) {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {cards.map((c) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {sorted.map((c) => (
           c.connected
             ? <ConnectedCard key={c.id} card={c} />
             : <NotConnectedCard key={c.id} card={c} />

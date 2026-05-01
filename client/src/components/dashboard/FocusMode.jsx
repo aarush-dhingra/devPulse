@@ -102,6 +102,17 @@ export default function FocusMode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, endsAt]);
 
+  /* Listen for the global "Start Focus Session" CTA — TodayFocus dispatches
+     this event so the panel can be triggered from anywhere on the page. */
+  useEffect(() => {
+    const handler = () => {
+      if (!running) start();
+    };
+    window.addEventListener("devpulse:focus:start", handler);
+    return () => window.removeEventListener("devpulse:focus:start", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, phase, settings, remaining, endsAt]);
+
   useEffect(() => {
     saveJSON(STORAGE_KEY, { phase, running, endsAt });
   }, [phase, running, endsAt]);

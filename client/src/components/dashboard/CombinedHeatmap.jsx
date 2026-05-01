@@ -24,10 +24,18 @@ const RAMP = [
 ];
 
 const PLATFORM_META = {
-  github:     { id: "github",     label: "GitHub",     color: "#f0f6fc", unit: "contributions" },
-  leetcode:   { id: "leetcode",   label: "LeetCode",   color: "#ffa116", unit: "submissions"   },
-  codeforces: { id: "codeforces", label: "Codeforces", color: "#fe646f", unit: "submissions"   },
-  wakatime:   { id: "wakatime",   label: "Wakatime",   color: "#22d3ee", unit: "hours"         },
+  github:     { id: "github",     label: "GitHub",        color: "#f0f6fc", unit: "contributions" },
+  leetcode:   { id: "leetcode",   label: "LeetCode",      color: "#ffa116", unit: "submissions"   },
+  codeforces: { id: "codeforces", label: "Codeforces",    color: "#fe646f", unit: "submissions"   },
+  gfg:        { id: "gfg",        label: "GeeksForGeeks", color: "#2f8d46", unit: "problems"      },
+  wakatime:   { id: "wakatime",   label: "Wakatime",      color: "#22d3ee", unit: "hours"         },
+};
+
+const PERIOD_LABEL = {
+  "7d":  "this week",
+  "30d": "this month",
+  "90d": "last 90 days",
+  "1y":  "last year",
 };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -48,7 +56,7 @@ function fmtPlatformValue(key, val) {
   return `${Math.round(Number(val))} ${Number(val) === 1 ? u.replace(/s$/, "") : u}`;
 }
 
-export default function CombinedHeatmap({ data }) {
+export default function CombinedHeatmap({ data, period = "1y" }) {
   const containerRef = useRef(null);
   const [hover, setHover] = useState(null);
 
@@ -136,7 +144,7 @@ export default function CombinedHeatmap({ data }) {
         <div className="flex items-center gap-2">
           <h3 className="font-display font-bold text-lg">Combined Activity</h3>
           <span className="pill-accent !py-0.5 !text-[10px]">
-            {Math.round(data.total).toLocaleString()} units · last year
+            {Math.round(data.total).toLocaleString()} units · {PERIOD_LABEL[period] || "selected range"}
           </span>
         </div>
         <div className="flex items-center gap-1.5 text-[10px] text-ink-faint">
@@ -228,7 +236,7 @@ export default function CombinedHeatmap({ data }) {
         <Stat
           label="Active days"
           value={`${data.totalActiveDays}`}
-          sub={`${Math.round((data.totalActiveDays / 365) * 100)}% of year`}
+          sub={`${Math.round((data.totalActiveDays / Math.max(1, data.heatmap.length)) * 100)}% of range`}
           accent="#22d3ee"
         />
       </div>

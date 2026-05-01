@@ -1,9 +1,11 @@
 /**
  * useSmartTasks — persistent, auto-tracked task system.
  *
- * Tasks are stored in localStorage. Auto-tracked types (problems, commits,
- * codingTime) derive their `progress` value live from the dashboard stats
- * prop so no manual completion is needed.
+ * Tasks live in localStorage. There are no defaults — the user starts
+ * with an empty list and adds tasks via the modal. Auto-tracked types
+ * (problems, commits, codingTime) derive their `progress` value live from
+ * the dashboard `stats` prop so no manual completion is needed; "custom"
+ * tasks are toggled by the user.
  *
  * Task schema:
  *   id        – unique string
@@ -14,52 +16,21 @@
  *   autotrack – boolean (false only for "custom")
  *   createdAt – timestamp
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-const STORAGE_KEY = "devpulse:smart-tasks:v2";
-
-/* Default tasks shown on first load (before user customises) */
-const DEFAULT_TASKS = [
-  {
-    id: "default-problems",
-    type: "problems",
-    title: "Solve problems",
-    target: 2,
-    platform: "all",
-    autotrack: true,
-    createdAt: 0,
-  },
-  {
-    id: "default-commits",
-    type: "commits",
-    title: "Push commits",
-    target: 2,
-    platform: "github",
-    autotrack: true,
-    createdAt: 0,
-  },
-  {
-    id: "default-coding",
-    type: "codingTime",
-    title: "Deep work",
-    target: 2,
-    platform: "wakatime",
-    autotrack: true,
-    createdAt: 0,
-  },
-];
+const STORAGE_KEY = "devpulse:smart-tasks:v3";
 
 /* ─── helpers ────────────────────────────────────────────────── */
 
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
+    if (!Array.isArray(parsed)) return [];
     return parsed;
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -84,6 +55,7 @@ function getTodayProgress(type, platform, stats) {
       const cfCount = Number((cf.dailySubmissions || []).find((d) => d.date === todayIso)?.count || 0);
       if (platform === "leetcode")   return lcCount;
       if (platform === "codeforces") return cfCount;
+      if (platform === "gfg")        return 0; // GFG has no per-day endpoint
       return lcCount + cfCount;
     }
     case "commits":
@@ -98,7 +70,7 @@ function getTodayProgress(type, platform, stats) {
 /* ─── hook ───────────────────────────────────────────────────── */
 
 export function useSmartTasks(stats) {
-  const [rawTasks, setRawTasks] = useState(() => load() ?? DEFAULT_TASKS);
+  const [rawTasks, setRawTasks] = useState(load);
   /* Manual toggle state for "custom" tasks (keyed by task id) */
   const [manualDone, setManualDone] = useState({});
 
@@ -112,16 +84,18 @@ export function useSmartTasks(stats) {
   }, []);
 
   const addTask = useCallback((fields) => {
+    const type = fields.type ?? "custom";
     const task = {
       id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      type:      fields.type     ?? "custom",
-      title:     (fields.title?.trim() || autoTitle(fields.type, fields.target, fields.platform)),
+      type,
+      title:     (fields.title?.trim() || autoTitle(type, fields.target, fields.platform)),
       target:    Number(fields.target) || 1,
       platform:  fields.platform ?? "all",
-      autotrack: fields.type !== "custom",
+      autotrack: type !== "custom",
       createdAt: Date.now(),
     };
     setTasks((prev) => [...prev, task]);
+    return task;
   }, [setTasks]);
 
   const removeTask = useCallback((id) => {
@@ -132,28 +106,30 @@ export function useSmartTasks(stats) {
     setManualDone((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
-  /* Compute progress for every task */
+  /* Compute progress + status for every task */
   const tasks = useMemo(() => {
     return rawTasks.map((task) => {
+      let progress;
+      let done;
       if (task.type === "custom") {
-        const done = !!manualDone[task.id];
-        return {
-          ...task,
-          progress:   done ? task.target : 0,
-          done,
-          pct:        done ? 100 : 0,
-          justDone:   false,
-        };
+        done = !!manualDone[task.id];
+        progress = done ? task.target : 0;
+      } else {
+        progress = getTodayProgress(task.type, task.platform, stats);
+        done = progress >= task.target;
       }
-      const progress = getTodayProgress(task.type, task.platform, stats);
-      const pct      = task.target > 0 ? Math.min(100, Math.round((progress / task.target) * 100)) : 0;
-      return {
-        ...task,
-        progress,
-        done:     progress >= task.target,
-        pct,
-        justDone: false,
-      };
+      const pct = task.target > 0 ? Math.min(100, Math.round((progress / task.target) * 100)) : 0;
+      const status = done
+        ? "completed"
+        : progress > 0
+          ? "in_progress"
+          : "pending";
+      const statusLabel = done
+        ? "Completed"
+        : progress > 0
+          ? "In Progress"
+          : "Pending";
+      return { ...task, progress, done, pct, status, statusLabel };
     });
   }, [rawTasks, stats, manualDone]);
 

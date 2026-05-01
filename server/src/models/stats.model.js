@@ -38,6 +38,36 @@ async function getLatestForPlatform(userId, platform) {
   return { ...rows[0].raw_data, _ts: rows[0].created_at };
 }
 
+async function getHistory(userId, platform, limit = 60) {
+  const { rows } = await db.query(
+    `SELECT raw_data, created_at
+     FROM stats_snapshots
+     WHERE user_id = $1 AND platform = $2
+     ORDER BY created_at ASC
+     LIMIT $3`,
+    [userId, platform, limit]
+  );
+  return rows;
+}
+
+async function getMultiPlatformHistory(userId, platforms, limit = 60) {
+  const { rows } = await db.query(
+    `SELECT platform, raw_data, created_at
+     FROM stats_snapshots
+     WHERE user_id = $1 AND platform = ANY($2::text[])
+     ORDER BY created_at ASC
+     LIMIT $3`,
+    [userId, platforms, limit * platforms.length]
+  );
+  const grouped = {};
+  for (const p of platforms) grouped[p] = [];
+  for (const r of rows) {
+    if (!grouped[r.platform]) grouped[r.platform] = [];
+    grouped[r.platform].push(r);
+  }
+  return grouped;
+}
+
 async function pruneOld({ keepPerPlatform = 30 } = {}) {
   // Keeps the latest N snapshots per (user, platform).
   await db.query(
@@ -60,5 +90,7 @@ module.exports = {
   saveSnapshot,
   getLatestForUser,
   getLatestForPlatform,
+  getHistory,
+  getMultiPlatformHistory,
   pruneOld,
 };

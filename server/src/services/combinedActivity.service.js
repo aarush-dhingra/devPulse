@@ -8,9 +8,6 @@ function dateKey(d) {
   return d.toISOString().slice(0, 10);
 }
 
-/**
- * Build a 365-day window of dates ending today (UTC, day-precision).
- */
 function windowDates(days = 365) {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -26,6 +23,69 @@ function emptyMap(dates) {
   for (const d of dates) m[d] = 0;
   return m;
 }
+
+/* ─── snapshot-delta engine ──────────────────────────────────────── */
+
+/**
+ * Compute per-day deltas from an ordered (ASC) array of snapshots.
+ *
+ * For each consecutive pair we diff the cumulative totals and attribute
+ * the positive change to the calendar day of the later snapshot.
+ * Multiple snapshots on the same day are collapsed (summed).
+ *
+ * `extractor(raw_data)` → `{ easy: N, medium: N, ... }` (cumulative).
+ * Returns `{ "2026-05-01": { easy: 3, medium: 0, ... }, ... }`.
+ */
+function snapshotDeltas(snapshots, extractor) {
+  const dayMap = {};
+  if (!snapshots || snapshots.length < 2) return dayMap;
+
+  let prev = extractor(snapshots[0].raw_data);
+  for (let i = 1; i < snapshots.length; i += 1) {
+    const curr = extractor(snapshots[i].raw_data);
+    const day = dateKey(new Date(snapshots[i].created_at));
+
+    const delta = {};
+    let hasPositive = false;
+    for (const k of Object.keys(curr)) {
+      const diff = Math.max(0, (Number(curr[k]) || 0) - (Number(prev[k]) || 0));
+      delta[k] = diff;
+      if (diff > 0) hasPositive = true;
+    }
+
+    if (hasPositive) {
+      if (!dayMap[day]) {
+        dayMap[day] = delta;
+      } else {
+        for (const k of Object.keys(delta)) {
+          dayMap[day][k] = (dayMap[day][k] || 0) + delta[k];
+        }
+      }
+    }
+    prev = curr;
+  }
+  return dayMap;
+}
+
+function lcExtractor(raw) {
+  const s = raw?.solved || {};
+  return {
+    easy:   Number(s.easy   || 0),
+    medium: Number(s.medium || 0),
+    hard:   Number(s.hard   || 0),
+    total:  Number(s.total  || 0),
+  };
+}
+
+function cfExtractor(raw) {
+  return { total: Number(raw?.uniqueSolved || 0) };
+}
+
+function gfgExtractor(raw) {
+  return { total: Number(raw?.problemsSolved || 0) };
+}
+
+/* ─── heatmap bucket helpers ─────────────────────────────────────── */
 
 function bucketGithub(stats) {
   const days = stats?.github?.contributions?.heatmap || [];
@@ -67,6 +127,19 @@ function bucketWakatime(stats) {
   return m;
 }
 
+async function bucketGfgFromHistory(userId) {
+  const history = await statsModel.getHistory(userId, "gfg", 60);
+  if (!history || history.length < 2) return {};
+  const deltas = snapshotDeltas(history, gfgExtractor);
+  const m = {};
+  for (const [day, d] of Object.entries(deltas)) {
+    if (d.total > 0) m[day] = d.total;
+  }
+  return m;
+}
+
+/* ─── streaks ────────────────────────────────────────────────────── */
+
 function computeStreaks(orderedDates, totalsMap) {
   let current = 0;
   let longest = 0;
@@ -86,32 +159,38 @@ function computeStreaks(orderedDates, totalsMap) {
   return { current, longest };
 }
 
-async function buildHeatmap(userId) {
+/* ─── buildHeatmap ───────────────────────────────────────────────── */
+
+async function buildHeatmap(userId, days = 365) {
   const stats = await statsModel.getLatestForUser(userId);
-  const dates = windowDates(365);
+  const dates = windowDates(days);
   const totals = emptyMap(dates);
 
+  const gfgBucket = await bucketGfgFromHistory(userId);
+
   const sources = {
-    github: bucketGithub(stats),
-    leetcode: bucketLeetcode(stats),
+    github:     bucketGithub(stats),
+    leetcode:   bucketLeetcode(stats),
     codeforces: bucketCodeforces(stats),
-    wakatime: bucketWakatime(stats),
+    wakatime:   bucketWakatime(stats),
+    gfg:        gfgBucket,
   };
 
   const perDayBreakdown = {};
   for (const date of dates) {
     const breakdown = {
-      github: Number(sources.github[date] || 0),
-      leetcode: Number(sources.leetcode[date] || 0),
+      github:     Number(sources.github[date]     || 0),
+      leetcode:   Number(sources.leetcode[date]   || 0),
       codeforces: Number(sources.codeforces[date] || 0),
-      wakatime: Number(sources.wakatime[date] || 0),
+      wakatime:   Number(sources.wakatime[date]   || 0),
+      gfg:        Number(sources.gfg[date]        || 0),
     };
-    // Summed intensity: counts directly + wakatime hours scaled (1h ≈ 1 unit)
     const total =
       breakdown.github +
       breakdown.leetcode +
       breakdown.codeforces +
-      breakdown.wakatime;
+      breakdown.wakatime +
+      breakdown.gfg;
     totals[date] = Number(total.toFixed(2));
     perDayBreakdown[date] = breakdown;
   }
@@ -150,106 +229,48 @@ async function buildHeatmap(userId) {
   };
 }
 
+/* ─── buildProblemsSeries (snapshot-delta approach) ───────────────── */
+
 /**
- * Daily (NOT cumulative) problems-solved series, broken down per platform.
- * Each row is `{ date, leetcode, codeforces, gfg }` representing the number
- * of problems solved that calendar day.
+ * Daily problems-solved series using the snapshot-delta approach.
  *
- * Submission-calendar APIs return daily *submission* counts (multiple
- * submissions per problem are possible). To produce a "problems solved"
- * approximation we scale each platform's daily counts so the in-window sum
- * equals the platform's window-share of its lifetime solved total. The
- * result honours the relative shape of the user's activity but never
- * over-counts beyond what they've actually solved.
+ * Instead of interpreting unreliable submission calendars, we compare
+ * consecutive stats_snapshots. If snapshot N has `solved.easy = 20` and
+ * snapshot N+1 has `solved.easy = 23`, we know exactly 3 easy problems
+ * were solved between the two snapshots.
+ *
+ * Each row is `{ date, easy, medium, hard, total }` — real per-difficulty
+ * counts with no approximation.
  *
  * For ranges > 90 days we bucket weekly so the chart stays readable.
  */
 async function buildProblemsSeries(userId, days = 90) {
-  const stats = await statsModel.getLatestForUser(userId);
   const dates = windowDates(days);
+  const emptyRow = () => ({ easy: 0, medium: 0, hard: 0, total: 0 });
 
-  const dailyFor = (allDays, totalSolved) => {
-    const out = Object.fromEntries(dates.map((d) => [d, 0]));
-    if (
-      !Array.isArray(allDays) ||
-      !allDays.length ||
-      !Number.isFinite(totalSolved) ||
-      totalSolved <= 0
-    ) {
-      return out;
-    }
-    let allTimeSum = 0;
-    let windowSum = 0;
-    for (const d of allDays) {
-      const c = Number(d.count || 0);
-      if (!c) continue;
-      allTimeSum += c;
-      if (d.date in out) {
-        out[d.date] += c;
-        windowSum += c;
-      }
-    }
-    if (windowSum <= 0) return out;
-    const windowFrac = allTimeSum > 0 ? windowSum / allTimeSum : 1;
-    const target = Math.min(totalSolved, Math.round(totalSolved * windowFrac));
-    if (target <= 0) {
-      for (const k of Object.keys(out)) out[k] = 0;
-      return out;
-    }
-    const scale = target / windowSum;
-    // Distribute as fractional values, then round so the rounded sum is
-    // close to target (largest-remainder method).
-    const scaled = {};
-    let runningInt = 0;
-    const remainders = [];
-    for (const date of dates) {
-      const v = (out[date] || 0) * scale;
-      const floor = Math.floor(v);
-      scaled[date] = floor;
-      runningInt += floor;
-      remainders.push({ date, frac: v - floor });
-    }
-    let leftover = target - runningInt;
-    remainders.sort((a, b) => b.frac - a.frac);
-    for (const r of remainders) {
-      if (leftover <= 0) break;
-      scaled[r.date] += 1;
-      leftover -= 1;
-    }
-    return scaled;
-  };
+  const history = await statsModel.getMultiPlatformHistory(
+    userId,
+    ["leetcode", "codeforces", "gfg"],
+    60
+  );
 
-  const lcSolved = Number(stats?.leetcode?.solved?.total || 0);
-  const cfSolved = Number(stats?.codeforces?.uniqueSolved || 0);
-  const gfgSolved = Number(stats?.gfg?.problemsSolved || 0);
+  const lcDeltas  = snapshotDeltas(history.leetcode  || [], lcExtractor);
+  const cfDeltas  = snapshotDeltas(history.codeforces || [], cfExtractor);
+  const gfgDeltas = snapshotDeltas(history.gfg        || [], gfgExtractor);
 
-  const lcDaily = dailyFor(stats?.leetcode?.dailySubmissions, lcSolved);
-  const cfDaily = dailyFor(stats?.codeforces?.dailySubmissions, cfSolved);
+  const daily = dates.map((date) => {
+    const lc  = lcDeltas[date]  || {};
+    const cf  = cfDeltas[date]  || {};
+    const gfg = gfgDeltas[date] || {};
 
-  // GFG has no daily endpoint — distribute total evenly so the bars are
-  // visible but don't fake daily granularity.
-  const gfgDaily = Object.fromEntries(dates.map((d) => [d, 0]));
-  if (gfgSolved > 0 && dates.length > 0) {
-    const per = gfgSolved / dates.length;
-    let acc = 0;
-    let placed = 0;
-    for (const d of dates) {
-      acc += per;
-      const whole = Math.floor(acc);
-      const inc = whole - placed;
-      gfgDaily[d] = inc;
-      placed = whole;
-    }
-  }
+    const easy   = Number(lc.easy   || 0) + Number(gfg.total || 0);
+    const medium = Number(lc.medium || 0);
+    const hard   = Number(lc.hard   || 0) + Number(cf.total  || 0);
+    const total  = easy + medium + hard;
 
-  const daily = dates.map((date) => ({
-    date,
-    leetcode: Number(lcDaily[date] || 0),
-    codeforces: Number(cfDaily[date] || 0),
-    gfg: Number(gfgDaily[date] || 0),
-  }));
+    return { date, easy, medium, hard, total };
+  });
 
-  // Bucket weekly for long ranges so the chart isn't a wall of bars.
   if (days > 90) {
     const weekMap = {};
     for (const d of daily) {
@@ -257,10 +278,11 @@ async function buildProblemsSeries(userId, days = 90) {
       const dow = dt.getUTCDay();
       const monday = new Date(dt.getTime() - ((dow + 6) % 7) * DAY_MS);
       const wk = dateKey(monday);
-      if (!weekMap[wk]) weekMap[wk] = { date: wk, leetcode: 0, codeforces: 0, gfg: 0 };
-      weekMap[wk].leetcode += d.leetcode;
-      weekMap[wk].codeforces += d.codeforces;
-      weekMap[wk].gfg += d.gfg;
+      if (!weekMap[wk]) weekMap[wk] = { date: wk, ...emptyRow() };
+      weekMap[wk].easy   += d.easy;
+      weekMap[wk].medium += d.medium;
+      weekMap[wk].hard   += d.hard;
+      weekMap[wk].total  += d.total;
     }
     return Object.values(weekMap).sort((a, b) => a.date.localeCompare(b.date));
   }
@@ -268,9 +290,8 @@ async function buildProblemsSeries(userId, days = 90) {
   return daily;
 }
 
-/**
- * Daily Wakatime hours (and a weekly aggregation) for the bar chart.
- */
+/* ─── buildCodingTimeSeries ──────────────────────────────────────── */
+
 async function buildCodingTimeSeries(userId, days = 30) {
   const stats = await statsModel.getLatestForUser(userId);
   const dates = windowDates(days);
@@ -283,7 +304,6 @@ async function buildCodingTimeSeries(userId, days = 30) {
     hours: Number((dailyWk[date] || 0).toFixed(2)),
   }));
 
-  // Weekly aggregate (last 12 weeks)
   const weekMap = {};
   for (const d of daily) {
     const dt = new Date(d.date + "T00:00:00Z");

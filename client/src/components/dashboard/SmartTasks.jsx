@@ -1,14 +1,18 @@
 /**
- * SmartTasks — auto-tracked, user-defined productivity task panel.
+ * SmartTasks — auto-tracked, user-defined productivity panel.
  *
- * • Shows summary: X / Y done
- * • Each task: icon, title, progress bar, "X / target" count, badge (Auto / Manual)
- * • Completion state: green glow + animated checkmark
- * • Inline "Add Task" form: type selector → target → platform → title
- * • Delete button per task
+ * • Empty by default — shows "No tasks yet" with a "+ Add Task" CTA
+ * • Add Task is a modal: Title (optional) · Platform · Task Type · Target
+ * • Auto-tracked types pull progress live from the dashboard `stats`
+ *   (Problems → LeetCode/Codeforces, Commits → GitHub, Coding Time → WakaTime)
+ * • Each task row shows a progress bar, current/target value, and a status
+ *   pill: Pending / In Progress / Completed
+ * • Custom tasks have a manual ✓ toggle
  */
 import { useEffect, useRef, useState } from "react";
+import Modal from "../ui/Modal";
 import { useSmartTasks } from "../../hooks/useSmartTasks";
+import PlatformLogo from "../ui/PlatformLogo";
 
 /* ─── metadata ───────────────────────────────────────────────── */
 
@@ -20,21 +24,28 @@ const TYPE_META = {
 };
 
 const PLATFORM_OPTIONS = {
-  problems:   [
-    { id: "all",        label: "All Platforms" },
+  problems: [
+    { id: "all",        label: "All Problems Platforms" },
     { id: "leetcode",   label: "LeetCode" },
     { id: "codeforces", label: "Codeforces" },
+    { id: "gfg",        label: "GeeksForGeeks" },
   ],
   commits:    [{ id: "github",   label: "GitHub" }],
   codingTime: [{ id: "wakatime", label: "WakaTime" }],
-  custom:     [],
+  custom:     [{ id: "manual",   label: "Manual (no platform)" }],
 };
 
 const DEFAULT_TARGETS = { problems: 2, commits: 2, codingTime: 2, custom: 1 };
 
-/* ─── AddTask inline form ───────────────────────────────────── */
+const STATUS_STYLES = {
+  completed:   "text-emerald-400 bg-emerald-500/12 border-emerald-500/25",
+  in_progress: "text-orange-400  bg-orange-500/12  border-orange-500/25",
+  pending:     "text-amber-400   bg-amber-500/12   border-amber-500/25",
+};
 
-function AddTaskForm({ onAdd, onCancel }) {
+/* ─── Add-Task modal body ────────────────────────────────────── */
+
+function AddTaskModalBody({ onAdd, onCancel }) {
   const [type,     setType]     = useState("problems");
   const [title,    setTitle]    = useState("");
   const [target,   setTarget]   = useState(DEFAULT_TARGETS.problems);
@@ -48,7 +59,6 @@ function AddTaskForm({ onAdd, onCancel }) {
     setTarget(DEFAULT_TARGETS[t] ?? 1);
     const opts = PLATFORM_OPTIONS[t];
     setPlatform(opts?.[0]?.id ?? "all");
-    setTitle("");
   };
 
   const handleSubmit = (e) => {
@@ -59,90 +69,97 @@ function AddTaskForm({ onAdd, onCancel }) {
 
   const typeMeta  = TYPE_META[type];
   const platOpts  = PLATFORM_OPTIONS[type];
-  const showPlat  = platOpts.length > 1;
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mt-2 rounded-xl border border-accent-500/25 bg-accent-500/[0.06] p-3 space-y-2.5"
-    >
-      <div className="text-[10px] uppercase tracking-widest text-accent-300 mb-1">New Task</div>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Title */}
+      <label className="block">
+        <span className="block text-[10px] uppercase tracking-widest text-ink-faint mb-1">
+          Task Title <span className="normal-case text-ink-faint/70">(optional)</span>
+        </span>
+        <input
+          ref={titleRef}
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={80}
+          placeholder="e.g. Finish weekly contest problems"
+          className="input"
+        />
+      </label>
 
-      {/* Type selector */}
-      <div className="flex gap-1 flex-wrap">
-        {Object.entries(TYPE_META).map(([id, m]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => handleTypeChange(id)}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] border transition ${
-              type === id
-                ? "text-black font-bold border-transparent"
-                : "text-ink-muted border-white/10 bg-white/[0.03] hover:border-white/20"
-            }`}
-            style={type === id ? { background: m.accentColor } : {}}
-          >
-            {m.icon} {m.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Target + platform row */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-1.5 flex-1">
-          <span className="text-[10px] text-ink-faint uppercase tracking-wider">Target</span>
-          <input
-            type="number"
-            min="1"
-            max={type === "codingTime" ? 24 : 200}
-            step={type === "codingTime" ? 0.5 : 1}
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            className="bg-transparent text-ink font-bold text-sm w-14 text-right focus:outline-none tabular-nums"
-            required
-          />
-          <span className="text-[10px] text-ink-faint">{typeMeta.unit}</span>
+      {/* Task Type */}
+      <div>
+        <span className="block text-[10px] uppercase tracking-widest text-ink-faint mb-1.5">
+          Task Type
+        </span>
+        <div className="grid grid-cols-2 gap-1.5">
+          {Object.entries(TYPE_META).map(([id, m]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => handleTypeChange(id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] border transition ${
+                type === id
+                  ? "text-black font-bold border-transparent"
+                  : "text-ink-muted border-white/10 bg-white/[0.03] hover:border-white/20"
+              }`}
+              style={type === id ? { background: m.accentColor } : {}}
+            >
+              <span>{m.icon}</span>
+              <span>{m.label}</span>
+            </button>
+          ))}
         </div>
-
-        {showPlat && (
-          <select
-            value={platform}
-            onChange={(e) => setPlatform(e.target.value)}
-            className="flex-1 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-ink focus:outline-none"
-          >
-            {platOpts.map((p) => (
-              <option key={p.id} value={p.id} className="bg-black">{p.label}</option>
-            ))}
-          </select>
-        )}
       </div>
 
-      {/* Optional title */}
-      <input
-        ref={titleRef}
-        type="text"
-        placeholder={`Custom label (optional)`}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        maxLength={60}
-        className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-ink placeholder-ink-faint focus:outline-none focus:border-accent-500/40 transition"
-      />
-
-      {/* Actions */}
-      <div className="flex gap-2 pt-0.5">
-        <button
-          type="submit"
-          className="flex-1 rounded-lg py-1.5 text-[11px] font-bold uppercase tracking-wider transition hover:opacity-90"
-          style={{ background: typeMeta.accentColor, color: "#000" }}
+      {/* Platform */}
+      <label className="block">
+        <span className="block text-[10px] uppercase tracking-widest text-ink-faint mb-1">
+          Platform
+        </span>
+        <select
+          value={platform}
+          onChange={(e) => setPlatform(e.target.value)}
+          className="input"
         >
-          Add Task
-        </button>
+          {platOpts.map((p) => (
+            <option key={p.id} value={p.id} className="bg-black">{p.label}</option>
+          ))}
+        </select>
+      </label>
+
+      {/* Target */}
+      <label className="block">
+        <span className="block text-[10px] uppercase tracking-widest text-ink-faint mb-1">
+          Target value <span className="normal-case text-ink-faint/70">({typeMeta.unit || "units"})</span>
+        </span>
+        <input
+          type="number"
+          min="1"
+          max={type === "codingTime" ? 24 : 500}
+          step={type === "codingTime" ? 0.5 : 1}
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          className="input tabular-nums"
+          required
+        />
+      </label>
+
+      <div className="flex justify-end gap-2 pt-1">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 rounded-lg py-1.5 text-[11px] text-ink-muted border border-white/10 hover:border-white/20 transition"
+          className="btn-ghost"
         >
           Cancel
+        </button>
+        <button
+          type="submit"
+          className="rounded-xl px-5 py-2 text-sm font-bold transition hover:opacity-90"
+          style={{ background: typeMeta.accentColor, color: "#000" }}
+        >
+          Add Task
         </button>
       </div>
     </form>
@@ -156,7 +173,7 @@ function TaskRow({ task, onRemove, onToggleManual }) {
   const isDone  = task.done;
   const isAuto  = task.autotrack;
 
-  const unit    = task.type === "codingTime"
+  const valueText = task.type === "codingTime"
     ? `${task.progress.toFixed(1)} / ${task.target}h`
     : `${task.progress} / ${task.target}`;
 
@@ -165,13 +182,13 @@ function TaskRow({ task, onRemove, onToggleManual }) {
       className="relative group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-all duration-300"
       style={{
         borderColor: isDone ? `${meta.accentColor}40` : "rgba(255,255,255,0.06)",
-        background: isDone ? `${meta.accentColor}08` : "rgba(255,255,255,0.02)",
-        boxShadow: isDone ? `0 0 16px ${meta.accentColor}15` : "none",
+        background:  isDone ? `${meta.accentColor}08` : "rgba(255,255,255,0.02)",
+        boxShadow:   isDone ? `0 0 16px ${meta.accentColor}15` : "none",
       }}
     >
-      {/* Status icon */}
+      {/* Icon */}
       <span
-        className={`shrink-0 text-base transition-all duration-300 ${isDone ? "scale-110" : "opacity-70"}`}
+        className={`shrink-0 text-base transition-all duration-300 ${isDone ? "scale-110" : "opacity-80"}`}
         style={isDone ? { filter: `drop-shadow(0 0 6px ${meta.accentColor})` } : {}}
       >
         {isDone ? "✅" : meta.icon}
@@ -183,16 +200,12 @@ function TaskRow({ task, onRemove, onToggleManual }) {
           <span className={`text-[12px] font-medium truncate ${isDone ? "line-through text-ink-muted" : "text-ink"}`}>
             {task.title}
           </span>
-          {/* Auto / Manual badge */}
-          <span
-            className={`shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full border font-bold ${
-              isAuto
-                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
-                : "text-ink-faint bg-white/[0.03] border-white/[0.06]"
-            }`}
-          >
-            {isAuto ? "Auto" : "Manual"}
-          </span>
+          {task.platform && task.platform !== "all" && task.platform !== "manual" && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-ink-faint">
+              <PlatformLogo platform={task.platform} size={9} brand color="currentColor" />
+              {task.platform}
+            </span>
+          )}
         </div>
 
         {/* Progress bar */}
@@ -203,17 +216,25 @@ function TaskRow({ task, onRemove, onToggleManual }) {
               style={{
                 width: `${task.pct}%`,
                 background: isDone ? "#10b981" : meta.accentColor,
-                boxShadow: isDone ? `0 0 8px #10b98166` : `0 0 6px ${meta.accentColor}66`,
+                boxShadow: isDone ? "0 0 8px #10b98166" : `0 0 6px ${meta.accentColor}66`,
               }}
             />
           </div>
           <span className="text-[10px] tabular-nums text-ink-faint shrink-0 w-16 text-right">
-            {unit}
+            {valueText}
           </span>
         </div>
       </div>
 
-      {/* Toggle (custom) or delete */}
+      {/* Status pill */}
+      <span
+        className={`shrink-0 text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full border font-bold ${STATUS_STYLES[task.status]}`}
+        title={isAuto ? "Auto-tracked from connected platforms" : "Manual task"}
+      >
+        {task.statusLabel}
+      </span>
+
+      {/* Actions (hover) */}
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition">
         {!isAuto && (
           <button
@@ -236,10 +257,10 @@ function TaskRow({ task, onRemove, onToggleManual }) {
   );
 }
 
-/* ─── Summary bar ────────────────────────────────────────────── */
+/* ─── summary bar ────────────────────────────────────────────── */
 
 function SummaryBar({ summary }) {
-  const { total, completed, remaining } = summary;
+  const { total, completed } = summary;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const allDone = completed === total && total > 0;
 
@@ -270,11 +291,11 @@ function SummaryBar({ summary }) {
 
 export default function SmartTasks({ stats }) {
   const { tasks, summary, addTask, removeTask, toggleManual } = useSmartTasks(stats);
-  const [showForm, setShowForm] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const handleAdd = (fields) => {
     addTask(fields);
-    setShowForm(false);
+    setModalOpen(false);
   };
 
   return (
@@ -293,25 +314,37 @@ export default function SmartTasks({ stats }) {
           />
         ))}
 
-        {tasks.length === 0 && !showForm && (
-          <div className="text-center py-3 text-[11px] text-ink-faint">
-            No tasks yet — add one below
+        {tasks.length === 0 && (
+          <div className="text-center py-6 px-3 rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02]">
+            <div className="text-3xl opacity-50">🗂️</div>
+            <p className="text-[12px] font-medium text-ink-muted mt-1.5">No tasks yet</p>
+            <p className="text-[10px] text-ink-faint mt-0.5">
+              Add your first goal — auto-tracked from your connected platforms.
+            </p>
           </div>
         )}
       </div>
 
-      {/* Add form / button */}
-      {showForm ? (
-        <AddTaskForm onAdd={handleAdd} onCancel={() => setShowForm(false)} />
-      ) : (
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/[0.12] py-2 text-[11px] text-ink-faint hover:text-accent-300 hover:border-accent-500/30 transition-all duration-200"
-        >
-          <span className="text-base leading-none">+</span>
-          Add Task
-        </button>
-      )}
+      {/* Add button */}
+      <button
+        onClick={() => setModalOpen(true)}
+        className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/[0.12] py-2 text-[11px] text-ink-faint hover:text-accent-300 hover:border-accent-500/30 transition-all duration-200"
+      >
+        <span className="text-base leading-none">+</span>
+        Add Task
+      </button>
+
+      {/* Modal */}
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="New Task"
+      >
+        <AddTaskModalBody
+          onAdd={handleAdd}
+          onCancel={() => setModalOpen(false)}
+        />
+      </Modal>
     </div>
   );
 }

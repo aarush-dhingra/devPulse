@@ -1,16 +1,23 @@
 /**
- * DateRangeBar — global time-window filter at the top of the Dashboard.
+ * DateRangeBar — global time-window filter for the Dashboard.
  *
- * Currently controls the Problems Solved + Coding Time series period. The
- * heatmap stays at full year; the bar still surfaces the visible window so
- * the user always knows what window the charts cover.
+ * Selecting a window updates the centralized `period` state in Dashboard,
+ * which flows down to the heatmap, pie chart, problems chart, activity
+ * timeline, and stats cards. Refresh lives in the global TopBar — this
+ * bar is purely for date filtering.
  */
-const PERIODS = [
-  { id: "7d", label: "This Week", days: 7 },
-  { id: "30d", label: "This Month", days: 30 },
-  { id: "90d", label: "Last 90d", days: 90 },
-  { id: "1y", label: "This Year", days: 365 },
+export const PERIODS = [
+  { id: "7d",  label: "This Week",   short: "7D",  days: 7   },
+  { id: "30d", label: "This Month",  short: "30D", days: 30  },
+  { id: "90d", label: "Last 90 Days", short: "90D", days: 90  },
+  { id: "1y",  label: "This Year",   short: "1Y",  days: 365 },
 ];
+
+export const PERIOD_BY_ID = Object.fromEntries(PERIODS.map((p) => [p.id, p]));
+
+export function periodToDays(id) {
+  return PERIOD_BY_ID[id]?.days ?? 90;
+}
 
 function fmt(d) {
   return d.toLocaleDateString(undefined, {
@@ -20,8 +27,8 @@ function fmt(d) {
   });
 }
 
-export default function DateRangeBar({ period, onChange, refreshing, onRefresh, compact = false }) {
-  const meta = PERIODS.find((p) => p.id === period) || PERIODS[2];
+export default function DateRangeBar({ period, onChange, compact = false }) {
+  const meta = PERIOD_BY_ID[period] || PERIODS[2];
   const end = new Date();
   end.setHours(0, 0, 0, 0);
   const start = new Date(end.getTime() - (meta.days - 1) * 86400000);
@@ -48,27 +55,12 @@ export default function DateRangeBar({ period, onChange, refreshing, onRefresh, 
                 ? "bg-accent-500/20 text-accent-200 ring-1 ring-accent-500/40"
                 : "text-ink-muted hover:text-ink"
             }`}
+            title={p.label}
           >
             {p.label}
           </button>
         ))}
       </div>
-
-      {onRefresh && (
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="px-2.5 py-1 text-[11px] font-medium rounded-full
-                     border border-white/10 text-ink-muted
-                     hover:text-accent-200 hover:border-accent-500/40
-                     disabled:opacity-50 transition flex items-center gap-1.5"
-          title="Refetch stats"
-        >
-          {refreshing ? <SpinnerIcon /> : <RefreshIcon />}
-          <span className="hidden sm:inline">Refresh</span>
-        </button>
-      )}
     </div>
   );
 }
@@ -87,37 +79,6 @@ function CalendarIcon() {
     >
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  );
-}
-function RefreshIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8" />
-      <path d="M21 3v5h-5M3 21v-5h5" />
-    </svg>
-  );
-}
-function SpinnerIcon() {
-  return (
-    <svg
-      className="animate-spin"
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-    >
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
-      <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
     </svg>
   );
 }
