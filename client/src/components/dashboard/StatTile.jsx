@@ -49,7 +49,7 @@ export default function StatTile({
   return (
     <Wrapper
       {...wrapperProps}
-      className="group relative panel-pad !p-4 overflow-hidden card-hover block"
+      className="group relative panel rounded-xl p-3 overflow-hidden card-hover block"
     >
       <div
         className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-30 group-hover:opacity-50 transition-opacity"
@@ -68,21 +68,21 @@ export default function StatTile({
               ))}
             <span>{label}</span>
           </div>
-          <div className="mt-1.5 flex items-baseline gap-1">
-            {prefix && <span className="text-lg text-ink-muted">{prefix}</span>}
+          <div className="mt-1 flex items-baseline gap-1">
+            {prefix && <span className="text-base text-ink-muted">{prefix}</span>}
             <span
-              className="font-display font-bold text-3xl tabular-nums"
+              className="font-display font-bold text-2xl tabular-nums leading-none"
               style={{ textShadow: `0 0 18px ${accent}33` }}
             >
               {display ?? "—"}
             </span>
-            {suffix && <span className="text-sm text-ink-muted">{suffix}</span>}
+            {suffix && <span className="text-xs text-ink-muted">{suffix}</span>}
           </div>
         </div>
 
         {spark && spark.length > 0 && (
           <div className="opacity-90 group-hover:opacity-100 transition">
-            <Sparkline values={spark} color={accent} width={88} height={32} />
+            <Sparkline values={spark} color={accent} width={70} height={26} />
           </div>
         )}
       </div>

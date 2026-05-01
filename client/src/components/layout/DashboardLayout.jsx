@@ -9,8 +9,8 @@ export default function DashboardLayout({ children }) {
       <Sidebar />
       <div className="flex-1 min-w-0 flex flex-col">
         <TopBar />
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
-          <div className="max-w-[1400px] mx-auto space-y-6 route-fade-in">{children}</div>
+        <div className="flex-1 px-3 sm:px-4 lg:px-5 py-4">
+          <div className="max-w-[1500px] mx-auto space-y-3 route-fade-in">{children}</div>
         </div>
       </div>
     </div>

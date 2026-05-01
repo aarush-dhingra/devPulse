@@ -2,12 +2,10 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useStats } from "../hooks/useStats";
 
-import DevScoreCard from "../components/dashboard/DevScoreCard";
 import StatTile from "../components/dashboard/StatTile";
 import CombinedHeatmap from "../components/dashboard/CombinedHeatmap";
 import LanguageRadar from "../components/dashboard/LanguageRadar";
 import CodingTimeBars from "../components/dashboard/CodingTimeBars";
-import SolveBreakdown from "../components/dashboard/SolveBreakdown";
 import PlatformOverview from "../components/dashboard/PlatformOverview";
 import ProblemsSolvedChart from "../components/dashboard/ProblemsSolvedChart";
 import RecentAchievements from "../components/dashboard/RecentAchievements";
@@ -24,6 +22,7 @@ import PlatformDetail from "./PlatformDetail";
 
 import { dashboardApi } from "../api/dashboard.api";
 import PlatformLogo from "../components/ui/PlatformLogo";
+import DateRangeBar from "../components/dashboard/DateRangeBar";
 
 export default function Dashboard() {
   const { platform } = useParams();
@@ -31,6 +30,7 @@ export default function Dashboard() {
   const [heatmap, setHeatmap] = useState(null);
   const [series, setSeries] = useState(null);
   const [seriesPeriod, setSeriesPeriod] = useState("90d");
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!data) return;
@@ -41,6 +41,15 @@ export default function Dashboard() {
     if (!data) return;
     dashboardApi.series(seriesPeriod).then(setSeries).catch(() => setSeries(null));
   }, [data, seriesPeriod]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (loading && !data) {
     return (
@@ -99,7 +108,14 @@ export default function Dashboard() {
   const heatmapSpark = sliceLast(heatmap?.heatmap, 14);
 
   return (
-    <div className="space-y-5 stagger-fade">
+    <div className="space-y-3 stagger-fade">
+      <DateRangeBar
+        period={seriesPeriod}
+        onChange={setSeriesPeriod}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+      />
+
       {/* Row 1 — six top-row tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatTile
@@ -152,20 +168,10 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Row 2 — DevScore + Combined Heatmap */}
-      <div className="grid lg:grid-cols-[420px_1fr] gap-4">
-        <DevScoreCard devscore={data.devscore} />
-        <CombinedHeatmap data={heatmap} />
-      </div>
-
-      {/* Row 3 — Platform Overview + Problems chart + Language donut */}
-      <div className="grid lg:grid-cols-[1.1fr_1.4fr_1fr] gap-4">
+      {/* Row 2 — Platform Overview · Activity Heatmap · Language Breakdown */}
+      <div className="grid lg:grid-cols-[1.1fr_1.4fr_1fr] gap-3">
         <PlatformOverview stats={stats} platforms={data.platforms || []} />
-        <ProblemsSolvedChart
-          series={series?.problems || []}
-          period={seriesPeriod}
-          onPeriodChange={setSeriesPeriod}
-        />
+        <CombinedHeatmap data={heatmap} />
         <LanguageRadar
           subtitle="GitHub + Wakatime"
           sources={[
@@ -179,31 +185,25 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Row 4 — Coding Time bars + Recent Achievements */}
-      <div className="grid lg:grid-cols-[1.4fr_1fr] gap-4">
+      {/* Row 3 — Problems Solved · Coding Time · Recent Achievements */}
+      <div className="grid lg:grid-cols-[1.3fr_1fr_1fr] gap-3">
+        <ProblemsSolvedChart
+          series={series?.problems || []}
+          period={seriesPeriod}
+        />
         <CodingTimeBars
           daily={series?.codingTime?.daily || []}
           weekly={series?.codingTime?.weekly || []}
         />
-          <RecentAchievements badges={data.badges || []} stats={stats} />
+        <RecentAchievements badges={data.badges || []} stats={stats} />
       </div>
 
-      {/* Row 5 — Active Projects + Goals + Focus/QOTD */}
-      <div className="grid lg:grid-cols-3 gap-4">
+      {/* Row 4 — Active Projects · Goals · Focus Mode · Quote of the Day */}
+      <div className="grid lg:grid-cols-4 gap-3">
         <ActiveProjects github={gh} />
         <Goals />
-        <div className="space-y-4">
-          <FocusMode />
-          <QuoteOfTheDay />
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4">
-        <SolveBreakdown leetcode={lc} />
-        <div className="panel-pad">
-          <h3 className="font-display font-bold text-lg mb-2">Connected Platforms</h3>
-          <PlatformBadgesInline platforms={data.platforms || []} />
-        </div>
+        <FocusMode />
+        <QuoteOfTheDay />
       </div>
     </div>
   );
@@ -229,39 +229,3 @@ function sliceLast(arr, n, key = "count") {
   return arr.slice(-n).map((d) => Number(d[key] ?? d.count ?? 0));
 }
 
-function PlatformBadgesInline({ platforms }) {
-  if (!platforms?.length) {
-    return (
-      <p className="text-sm text-ink-muted">
-        No platforms connected.{" "}
-        <Link to={ROUTES.settings} className="text-accent-300 hover:underline">
-          Connect one →
-        </Link>
-      </p>
-    );
-  }
-  return (
-    <div className="flex flex-wrap gap-2">
-      {platforms.map((p) => {
-        const tone =
-          p.status === "connected"
-            ? "pill-good"
-            : p.status === "error"
-              ? "pill-bad"
-              : "pill-warn";
-        return (
-          <Link
-            key={p.platform_name}
-            to={`/dashboard/${p.platform_name}`}
-            className={`${tone}`}
-          >
-            {p.platform_name}
-            <span className="opacity-60 normal-case font-normal">
-              · @{p.platform_username}
-            </span>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}

@@ -37,19 +37,19 @@ body::before {
 
 @layer components {
   .panel {
-    @apply bg-bg-card/90 backdrop-blur-xl rounded-2xl border border-white/[0.06]
+    @apply bg-bg-card/90 backdrop-blur-xl rounded-xl border border-white/[0.06]
            shadow-deep relative overflow-hidden;
   }
   .panel::before {
     content: "";
-    @apply absolute inset-0 pointer-events-none rounded-2xl;
+    @apply absolute inset-0 pointer-events-none rounded-xl;
     background: linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.025) 0%,
       transparent 35%
     );
   }
-  .panel-pad { @apply panel p-5; }
+  .panel-pad { @apply panel p-4; }
 
   .card {
     @apply panel-pad transition-all duration-200;

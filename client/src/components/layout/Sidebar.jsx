@@ -4,6 +4,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { tierFor } from "../../utils/scoreUtils";
 import { useStatsStore } from "../../store/statsStore";
 import PlatformLogo from "../ui/PlatformLogo";
+import SidebarDevScore from "./SidebarDevScore";
 
 const items = [
   { to: ROUTES.dashboard, label: "Overview", icon: GridIcon },
@@ -26,7 +27,7 @@ export default function Sidebar() {
   const tier = data?.devscore?.tier || tierFor(score);
 
   return (
-    <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-white/[0.05] bg-black/80 backdrop-blur-xl sticky top-0 h-screen z-20">
+    <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-white/[0.05] bg-black/80 backdrop-blur-xl sticky top-0 h-screen z-20">
       <Link to="/" className="flex items-center gap-2.5 px-5 py-4">
         <span className="grid place-items-center w-9 h-9 rounded-xl bg-gradient-to-br from-accent-500 to-cyan-500 glow-violet">
           <span className="text-white font-black">⚡</span>
@@ -39,15 +40,15 @@ export default function Sidebar() {
         </div>
       </Link>
 
-      <nav className="flex-1 px-3 py-2 overflow-y-auto">
+      <nav className="flex-1 px-2 py-1 overflow-y-auto">
         {items.map((it, i) => (
           <div key={it.to}>
-            {it.divider && i > 0 && <div className="hr-soft my-2 mx-2" />}
+            {it.divider && i > 0 && <div className="hr-soft my-1.5 mx-2" />}
             <NavLink
               to={it.to}
               end={it.to === ROUTES.dashboard}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition relative
+                `flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] transition relative
                  ${isActive
                     ? "text-accent-200 bg-accent-500/10"
                     : "text-ink-muted hover:text-ink hover:bg-white/[0.03]"
@@ -57,9 +58,9 @@ export default function Sidebar() {
               {({ isActive }) => (
                 <>
                   {isActive && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full bg-gradient-to-b from-accent-400 to-cyan-400 glow-violet" />
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-4 rounded-r-full bg-gradient-to-b from-accent-400 to-cyan-400 glow-violet" />
                   )}
-                  <span className="w-5 h-5 grid place-items-center">
+                  <span className="w-4 h-4 grid place-items-center">
                     {typeof it.icon === "function" ? <it.icon active={isActive} /> : it.icon}
                   </span>
                   <span className="font-medium">{it.label}</span>
@@ -71,58 +72,90 @@ export default function Sidebar() {
       </nav>
 
       {user && (
-        <div className="m-3 panel-pad !p-3 holo-border">
-          <Link
-            to={`/u/${user.username}`}
-            className="flex items-center gap-3 group"
+        <div
+          className="group/profile relative m-2"
+          tabIndex={0}
+        >
+          {/* Card lifts above the nav above it when expanded so it can overlay,
+              instead of pushing the rest of the layout. */}
+          <div
+            className="rounded-xl border border-white/[0.06] bg-bg-card/95 backdrop-blur-xl
+                       shadow-deep overflow-hidden
+                       transition-all duration-300 ease-out
+                       group-hover/profile:shadow-glow group-focus-within/profile:shadow-glow"
           >
-            {user.avatar_url ? (
-              <img
-                src={user.avatar_url}
-                alt=""
-                className="w-10 h-10 rounded-xl ring-1 ring-white/10"
+            {/* HEAD — always visible, compact */}
+            <Link
+              to={`/u/${user.username}`}
+              className="flex items-center gap-2.5 p-2.5 group/head"
+              title={user.name || user.username}
+            >
+              {user.avatar_url ? (
+                <img
+                  src={user.avatar_url}
+                  alt=""
+                  className="w-9 h-9 rounded-lg ring-1 ring-white/10 shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent-500 to-cyan-500 grid place-items-center text-white font-bold shrink-0">
+                  {(user.name || user.username || "?")[0]?.toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold truncate leading-tight group-hover/head:text-accent-200">
+                  {user.name || user.username}
+                </div>
+                <div className="text-[10.5px] text-ink-muted truncate leading-tight">
+                  @{user.username}
+                </div>
+              </div>
+              <ChevronIcon
+                className="text-ink-faint shrink-0 transition-transform duration-300
+                           group-hover/profile:rotate-180 group-focus-within/profile:rotate-180"
               />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-500 to-cyan-500 grid place-items-center text-white font-bold">
-                {(user.name || user.username || "?")[0]?.toUpperCase()}
+            </Link>
+
+            {/* DETAILS — collapsed by default, expands on hover/focus */}
+            <div
+              className="grid grid-rows-[0fr] opacity-0 transition-all duration-300 ease-out
+                         group-hover/profile:grid-rows-[1fr] group-hover/profile:opacity-100
+                         group-focus-within/profile:grid-rows-[1fr] group-focus-within/profile:opacity-100"
+            >
+              <div className="overflow-hidden">
+                <div className="px-3 pt-1 pb-3 border-t border-white/[0.05]">
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between text-[10px] uppercase tracking-wider mb-1">
+                      <span style={{ color: tier.color }}>
+                        {tier.emoji} {tier.name}
+                      </span>
+                      <span className="font-mono text-ink-muted">{score}/1000</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min(100, (score / 1000) * 100)}%`,
+                          background: `linear-gradient(90deg, ${tier.color}, #22d3ee)`,
+                          boxShadow: `0 0 12px ${tier.color}80`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <SidebarDevScore devscore={data?.devscore} />
+
+                  <SidebarStreak data={data} />
+
+                  <button
+                    onClick={logout}
+                    className="mt-3 w-full text-[11px] uppercase tracking-wider text-ink-faint hover:text-rose-300 transition py-1"
+                  >
+                    Sign out
+                  </button>
+                </div>
               </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold truncate group-hover:text-accent-200">
-                {user.name || user.username}
-              </div>
-              <div className="text-[11px] text-ink-muted truncate">
-                @{user.username}
-              </div>
-            </div>
-          </Link>
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-wider mb-1">
-              <span style={{ color: tier.color }}>
-                {tier.emoji} {tier.name}
-              </span>
-              <span className="font-mono text-ink-muted">{score}/1000</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${Math.min(100, (score / 1000) * 100)}%`,
-                  background: `linear-gradient(90deg, ${tier.color}, #22d3ee)`,
-                  boxShadow: `0 0 12px ${tier.color}80`,
-                }}
-              />
             </div>
           </div>
-
-          <SidebarStreak data={data} />
-
-          <button
-            onClick={logout}
-            className="mt-3 w-full text-[11px] uppercase tracking-wider text-ink-faint hover:text-rose-300 transition py-1"
-          >
-            Sign out
-          </button>
         </div>
       )}
     </aside>
@@ -237,6 +270,24 @@ function SidebarStreak({ data }) {
         })}
       </div>
     </div>
+  );
+}
+
+function ChevronIcon({ className = "" }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }
 

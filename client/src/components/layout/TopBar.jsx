@@ -41,14 +41,14 @@ export default function TopBar() {
 
   return (
     <header className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-white/[0.05]">
-      <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center gap-4">
+      <div className="px-3 sm:px-4 lg:px-5 h-14 flex items-center gap-3">
         <div className="hidden md:block min-w-0 flex-1">
           <div className="flex items-baseline gap-3">
-            <h1 className="font-display font-bold text-xl tracking-tight">
+            <h1 className="font-display font-bold text-base lg:text-lg tracking-tight leading-none">
               {greeting}, {user?.name?.split(" ")[0] || user?.username} 👋
             </h1>
           </div>
-          <p className="text-xs text-ink-muted truncate italic">
+          <p className="text-[11px] text-ink-muted truncate italic mt-0.5">
             "{quote}"
           </p>
         </div>

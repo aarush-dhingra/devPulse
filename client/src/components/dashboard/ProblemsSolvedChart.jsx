@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -13,17 +13,10 @@ import EmptyState from "../ui/EmptyState";
 import ChartTooltip from "../ui/ChartTooltip";
 import { chartTheme } from "../../utils/chartConfigs";
 
-const PERIODS = [
-  { id: "7d", label: "7d" },
-  { id: "30d", label: "30d" },
-  { id: "90d", label: "90d" },
-  { id: "1y", label: "1Y" },
-];
-
 const SERIES = [
   { key: "leetcode", color: "#ffa116", name: "LeetCode" },
-  { key: "codeforces", color: "#fe646f", name: "Codeforces" },
-  { key: "gfg", color: "#2f8d46", name: "GFG" },
+  { key: "codeforces", color: "#a78bfa", name: "Codeforces" },
+  { key: "gfg", color: "#10b981", name: "GFG" },
 ];
 
 function shortDate(d, isWeekly = false) {
@@ -35,56 +28,44 @@ function shortDate(d, isWeekly = false) {
   });
 }
 
-export default function ProblemsSolvedChart({ series = [], onPeriodChange, period = "90d" }) {
-  const [localPeriod, setLocalPeriod] = useState(period);
+export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
+  const isWeekly = period === "1y";
 
-  const setPeriod = (p) => {
-    setLocalPeriod(p);
-    onPeriodChange?.(p);
-  };
+  // Convert daily counts → running cumulative for the line view.
+  const data = useMemo(() => {
+    let lc = 0;
+    let cf = 0;
+    let gfg = 0;
+    return (series || []).map((d) => {
+      lc += Number(d.leetcode || 0);
+      cf += Number(d.codeforces || 0);
+      gfg += Number(d.gfg || 0);
+      return { date: d.date, leetcode: lc, codeforces: cf, gfg };
+    });
+  }, [series]);
 
-  const isWeekly = localPeriod === "1y";
-
-  const data = useMemo(() => series || [], [series]);
   const totals = useMemo(() => {
-    const t = { leetcode: 0, codeforces: 0, gfg: 0 };
-    for (const d of data) {
-      t.leetcode += Number(d.leetcode || 0);
-      t.codeforces += Number(d.codeforces || 0);
-      t.gfg += Number(d.gfg || 0);
-    }
-    return t;
+    const last = data[data.length - 1] || { leetcode: 0, codeforces: 0, gfg: 0 };
+    return { leetcode: last.leetcode, codeforces: last.codeforces, gfg: last.gfg };
   }, [data]);
   const grandTotal = totals.leetcode + totals.codeforces + totals.gfg;
   const hasData = grandTotal > 0;
 
-  const labelForLegend = isWeekly ? "this year" : `last ${localPeriod}`;
+  const labelForLegend = isWeekly ? "this year" : `last ${period}`;
+
+  // Decide whether to draw dots — gets noisy past ~30 points.
+  const showDots = data.length > 0 && data.length <= 32;
 
   return (
     <div className="panel-pad">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <h3 className="font-display font-bold text-lg">Problems Solved</h3>
+          <h3 className="font-display font-bold text-base">Problems Solved</h3>
           {hasData && (
-            <span className="pill-accent">
+            <span className="pill-accent !py-0.5 !text-[10px]">
               {grandTotal} · {labelForLegend}
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-1 rounded-full bg-white/[0.04] p-1">
-          {PERIODS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setPeriod(p.id)}
-              className={`px-3 py-1 text-[11px] uppercase tracking-wider rounded-full transition ${
-                localPeriod === p.id
-                  ? "bg-accent-500/20 text-accent-200 ring-1 ring-accent-500/40"
-                  : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -92,100 +73,97 @@ export default function ProblemsSolvedChart({ series = [], onPeriodChange, perio
         <EmptyState
           icon="📈"
           title="No problem-solving data yet"
-          description="Connect LeetCode, Codeforces, or GFG and we'll plot your daily breakdown here."
+          description="Connect LeetCode, Codeforces, or GFG and we'll plot your progress here."
         />
       ) : (
-        <>
-          <div className="h-72">
-            <ResponsiveContainer>
-              <BarChart
-                data={data}
-                margin={{ top: 8, right: 12, bottom: 0, left: -8 }}
-                barCategoryGap={isWeekly ? "18%" : "12%"}
-              >
-                <defs>
-                  {SERIES.map((s) => (
-                    <linearGradient key={s.key} id={`pbar-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={s.color} stopOpacity="1" />
-                      <stop offset="100%" stopColor={s.color} stopOpacity="0.55" />
-                    </linearGradient>
-                  ))}
-                </defs>
-                <CartesianGrid stroke={chartTheme.grid} vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: chartTheme.text, fontSize: 10 }}
-                  tickFormatter={(d) => shortDate(d, isWeekly)}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={36}
-                />
-                <YAxis
-                  tick={{ fill: chartTheme.text, fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={40}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  cursor={{ fill: "rgba(124,58,237,0.06)" }}
-                  content={
-                    <ChartTooltip
-                      formatValue={(v) => Math.round(Number(v) || 0).toLocaleString()}
-                    />
-                  }
-                  labelFormatter={(l) =>
-                    isWeekly
-                      ? `Week of ${shortDate(l)}`
-                      : new Date(l + "T00:00:00Z").toLocaleDateString(undefined, {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                        })
-                  }
-                />
-                <Legend
-                  verticalAlign="top"
-                  align="right"
-                  iconType="circle"
-                  wrapperStyle={{ fontSize: 11, color: chartTheme.text, paddingBottom: 8 }}
-                />
-                {SERIES.map((s) => (
-                  <Bar
-                    key={s.key}
-                    dataKey={s.key}
-                    name={s.name}
-                    stackId="problems"
-                    fill={`url(#pbar-${s.key})`}
-                    radius={[3, 3, 0, 0]}
-                    isAnimationActive
+        <div className="h-60">
+          <ResponsiveContainer>
+            <LineChart
+              data={data}
+              margin={{ top: 8, right: 12, bottom: 0, left: -12 }}
+            >
+              <CartesianGrid
+                stroke={chartTheme.grid}
+                strokeDasharray="3 6"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fill: chartTheme.text, fontSize: 10 }}
+                tickFormatter={(d) => shortDate(d, isWeekly)}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={36}
+              />
+              <YAxis
+                tick={{ fill: chartTheme.text, fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+                allowDecimals={false}
+              />
+              <Tooltip
+                cursor={{
+                  stroke: "rgba(167,139,250,0.35)",
+                  strokeWidth: 1,
+                  strokeDasharray: "3 3",
+                }}
+                content={
+                  <ChartTooltip
+                    formatValue={(v) => Math.round(Number(v) || 0).toLocaleString()}
                   />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {SERIES.map((s) => (
-              <div
-                key={s.key}
-                className="rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2"
-              >
-                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-ink-faint">
-                  <span
-                    className="w-2 h-2 rounded-sm"
-                    style={{ background: s.color, boxShadow: `0 0 6px ${s.color}` }}
-                  />
-                  {s.name}
-                </div>
-                <div className="stat-num text-lg" style={{ color: s.color }}>
-                  {totals[s.key]}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+                }
+                labelFormatter={(l) =>
+                  isWeekly
+                    ? `Week of ${shortDate(l)}`
+                    : new Date(l + "T00:00:00Z").toLocaleDateString(undefined, {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })
+                }
+              />
+              <Legend
+                verticalAlign="top"
+                align="right"
+                iconType="circle"
+                wrapperStyle={{
+                  fontSize: 11,
+                  color: chartTheme.text,
+                  paddingBottom: 6,
+                }}
+              />
+              {SERIES.map((s) => (
+                <Line
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.key}
+                  name={s.name}
+                  stroke={s.color}
+                  strokeWidth={2.25}
+                  dot={
+                    showDots
+                      ? {
+                          r: 3,
+                          fill: s.color,
+                          stroke: "#000",
+                          strokeWidth: 1.5,
+                        }
+                      : false
+                  }
+                  activeDot={{
+                    r: 5,
+                    fill: s.color,
+                    stroke: "#000",
+                    strokeWidth: 2,
+                  }}
+                  isAnimationActive
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

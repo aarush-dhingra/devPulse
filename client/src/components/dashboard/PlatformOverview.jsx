@@ -1,23 +1,22 @@
 import { Link } from "react-router-dom";
 import Sparkline from "./Sparkline";
+import PlatformLogo from "../ui/PlatformLogo";
 import { PLATFORM_BY_ID } from "../../utils/constants";
 import { formatNumber } from "../../utils/formatters";
 import EmptyState from "../ui/EmptyState";
 
 export default function PlatformOverview({ stats = {}, platforms = [] }) {
-  const connected = (platforms || []).filter(
-    (p) => p.platform_name !== "github" || p.last_synced
-  );
-
   const rows = (platforms || [])
-    .filter((p) => ["github", "leetcode", "codeforces", "gfg", "wakatime", "devto"].includes(p.platform_name))
+    .filter((p) =>
+      ["github", "leetcode", "codeforces", "gfg", "wakatime", "devto"].includes(p.platform_name)
+    )
     .map((p) => buildRow(p, stats[p.platform_name]))
     .filter(Boolean);
 
   if (!rows.length) {
     return (
       <div className="panel-pad">
-        <h3 className="font-display font-bold text-lg mb-2">Platform Overview</h3>
+        <h3 className="font-display font-bold text-base mb-2">Platform Overview</h3>
         <EmptyState
           icon="🔌"
           title="No platforms connected"
@@ -28,66 +27,106 @@ export default function PlatformOverview({ stats = {}, platforms = [] }) {
   }
 
   return (
-    <div className="panel-pad">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-bold text-lg">Platform Overview</h3>
-        <Link to="/settings" className="text-xs text-accent-300 hover:text-accent-200">
+    <div className="panel-pad flex flex-col h-full">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display font-bold text-base">Platform Overview</h3>
+        <Link to="/settings" className="text-[11px] text-accent-300 hover:text-accent-200">
           Manage →
         </Link>
       </div>
-      <ul className="divide-y divide-white/5">
+
+      <ul className="flex-1 divide-y divide-white/[0.04] overflow-hidden">
         {rows.map((r) => (
-          <Link
-            key={r.id}
-            to={r.href}
-            className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 py-3 px-2 -mx-2 rounded-xl hover:bg-white/[0.03] transition group"
-          >
-            <div
-              className="w-10 h-10 rounded-xl grid place-items-center text-lg ring-1 ring-white/10"
-              style={{ background: r.bg, color: r.color }}
+          <li key={r.id}>
+            <Link
+              to={r.href}
+              className="flex items-center gap-3 py-2 px-2 -mx-2 rounded-lg hover:bg-white/[0.03] transition group"
             >
-              {r.icon}
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-sm flex items-center gap-2">
-                {r.name}
-                <StatusDot status={r.status} />
+              {/* Logo */}
+              <div
+                className="w-8 h-8 rounded-lg grid place-items-center ring-1 ring-white/[0.08] shrink-0"
+                style={{
+                  background: r.bg,
+                  boxShadow: `0 0 14px ${r.color}22`,
+                }}
+              >
+                <PlatformLogo platform={r.id} size={16} color={r.color} />
               </div>
-              <div className="text-xs text-ink-muted truncate">
-                {r.metricsLabel}
+
+              {/* Name + 2 metrics */}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[13px] font-semibold leading-tight">{r.name}</span>
+                  <StatusDot status={r.status} />
+                </div>
+                <div className="flex items-center gap-3 mt-0.5">
+                  {r.metricA && (
+                    <span className="text-[11px] text-ink-muted leading-none">
+                      <span className="text-ink-faint">{r.metricA.label} </span>
+                      <span className="text-ink font-medium tabular-nums">{r.metricA.value}</span>
+                    </span>
+                  )}
+                  {r.metricB && (
+                    <span className="text-[11px] text-ink-muted leading-none">
+                      <span className="text-ink-faint">{r.metricB.label} </span>
+                      <span className="text-ink font-medium tabular-nums">{r.metricB.value}</span>
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="hidden sm:block">
-              <Sparkline values={r.spark} color={r.color} width={100} height={26} />
-            </div>
-            <div className="text-right">
-              <div className="text-sm font-bold tabular-nums">{r.primaryDisplay}</div>
-              {r.secondary && (
-                <div className="text-[11px] text-ink-faint">{r.secondary}</div>
+
+              {/* Sparkline */}
+              {r.spark?.length > 1 && (
+                <div className="hidden sm:block shrink-0 opacity-80 group-hover:opacity-100 transition">
+                  <Sparkline values={r.spark} color={r.color} width={80} height={22} />
+                </div>
               )}
-            </div>
-          </Link>
+
+              {/* Delta badge */}
+              {r.delta != null && (
+                <div
+                  className="shrink-0 text-[11px] font-semibold tabular-nums"
+                  style={{ color: r.delta >= 0 ? "#10b981" : "#ef4444" }}
+                >
+                  {r.delta >= 0 ? "▲" : "▼"} {Math.abs(r.delta).toFixed(1)}%
+                </div>
+              )}
+            </Link>
+          </li>
         ))}
       </ul>
+
+      <Link
+        to="/settings"
+        className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-between
+                   text-[12px] text-ink-muted hover:text-accent-300 transition"
+      >
+        <span>View all platforms</span>
+        <span>›</span>
+      </Link>
     </div>
   );
 }
 
 function StatusDot({ status }) {
-  const map = {
-    connected: "#10b981",
-    pending: "#f59e0b",
-    error: "#ef4444",
-  };
+  const map = { connected: "#10b981", pending: "#f59e0b", error: "#ef4444" };
   const c = map[status] || "#64748b";
   return (
     <span
-      className={`inline-block w-1.5 h-1.5 rounded-full ${
-        status === "pending" ? "animate-pulseGlow" : ""
-      }`}
+      className={`inline-block w-1.5 h-1.5 rounded-full ${status === "pending" ? "animate-pulseGlow" : ""}`}
       style={{ background: c, boxShadow: `0 0 6px ${c}` }}
     />
   );
+}
+
+function deltaPct(spark) {
+  if (!spark || spark.length < 2) return null;
+  const recent = spark.slice(-Math.max(1, Math.floor(spark.length / 2)));
+  const older  = spark.slice(0, Math.max(1, Math.floor(spark.length / 2)));
+  const sumRecent = recent.reduce((s, v) => s + (v || 0), 0);
+  const sumOlder  = older.reduce((s, v) => s + (v || 0), 0);
+  if (!sumOlder) return sumRecent > 0 ? 100 : null;
+  return ((sumRecent - sumOlder) / sumOlder) * 100;
 }
 
 function buildRow(p, data) {
@@ -97,82 +136,89 @@ function buildRow(p, data) {
   const base = {
     id: p.platform_name,
     name: meta.name,
-    icon: meta.icon,
     color: meta.color,
     bg: meta.bg,
     status: p.status,
     href: `/dashboard/${p.platform_name}`,
+    spark: [],
+    delta: null,
+    metricA: null,
+    metricB: null,
   };
 
   if (!data) {
     return {
       ...base,
-      metricsLabel: p.platform_username
-        ? `@${p.platform_username}`
-        : "Connect to fetch stats",
-      primaryDisplay: "—",
-      secondary: "no data",
-      spark: [],
+      metricA: { label: "", value: p.platform_username ? `@${p.platform_username}` : "—" },
     };
   }
 
   switch (p.platform_name) {
-    case "github":
+    case "github": {
+      const spark = weekSeries(data.contributions?.heatmap);
       return {
         ...base,
-        metricsLabel: `${formatNumber(data.contributions?.total ?? 0)} contributions · ${formatNumber(data.repos?.totalRepos ?? 0)} repos`,
-        primaryDisplay: formatNumber(data.commits?.totalSearched ?? data.contributions?.total ?? 0),
-        secondary: "commits",
-        spark: weekSeries(data.contributions?.heatmap),
+        spark,
+        delta: deltaPct(spark),
+        metricA: { label: "Commits", value: formatNumber(data.commits?.totalSearched ?? data.contributions?.total ?? 0) },
+        metricB: { label: "PRs", value: formatNumber(data.contributions?.mergedPRs ?? 0) },
       };
-    case "leetcode":
+    }
+    case "leetcode": {
+      const spark = solveSpark(data.solved);
       return {
         ...base,
-        metricsLabel: `E ${data.solved?.easy ?? 0} · M ${data.solved?.medium ?? 0} · H ${data.solved?.hard ?? 0}`,
-        primaryDisplay: formatNumber(data.solved?.total ?? 0),
-        secondary: "solved",
-        spark: solveSpark(data.solved),
+        spark,
+        delta: null,
+        metricA: { label: "Solved", value: formatNumber(data.solved?.total ?? 0) },
+        metricB: { label: "Rating", value: formatNumber(data.rating ?? 0) },
       };
-    case "codeforces":
+    }
+    case "codeforces": {
+      const spark = (data.ratingHistory || []).slice(-12).map((r) => r.newRating);
       return {
         ...base,
-        metricsLabel: `${data.profile?.rank || "—"} · ${data.contestsAttended ?? 0} contests`,
-        primaryDisplay: formatNumber(data.rating ?? 0),
-        secondary: "rating",
-        spark: (data.ratingHistory || []).slice(-12).map((r) => r.newRating),
+        spark,
+        delta: deltaPct(spark),
+        metricA: { label: "Rating", value: formatNumber(data.rating ?? 0) },
+        metricB: { label: "Global Rank", value: data.profile?.rank ? `#${formatNumber(data.profile.rank)}` : "—" },
       };
-    case "gfg":
+    }
+    case "gfg": {
       return {
         ...base,
-        metricsLabel: `${formatNumber(data.problemsSolved ?? 0)} solved · streak ${data.streak ?? 0}d`,
-        primaryDisplay: formatNumber(data.score ?? 0),
-        secondary: "score",
         spark: [],
+        delta: null,
+        metricA: { label: "Solved", value: formatNumber(data.problemsSolved ?? 0) },
+        metricB: { label: "Score", value: formatNumber(data.score ?? 0) },
       };
-    case "wakatime":
+    }
+    case "wakatime": {
+      const spark = (data.dailyHours || []).slice(-14).map((d) => d.hours || 0);
       return {
         ...base,
-        metricsLabel: `${(data.dailyAverageHours ?? 0).toFixed?.(1) || 0}h/day avg`,
-        primaryDisplay: `${Math.round(data.hoursLast30Days ?? 0)}h`,
-        secondary: "last 30d",
-        spark: (data.languages || []).slice(0, 8).map((l) => l.hours || 0),
+        spark,
+        delta: deltaPct(spark),
+        metricA: { label: "Time", value: `${Math.round(data.hoursLast30Days ?? 0)} hrs` },
+        metricB: { label: "Daily Avg", value: `${((data.dailyAverageHours ?? 0)).toFixed(1)} hrs` },
       };
-    case "devto":
+    }
+    case "devto": {
       return {
         ...base,
-        metricsLabel: `${data.totalReactions ?? 0} reactions · ${data.totalComments ?? 0} comments`,
-        primaryDisplay: formatNumber(data.articleCount ?? 0),
-        secondary: "articles",
         spark: [],
+        delta: null,
+        metricA: { label: "Articles", value: formatNumber(data.articleCount ?? 0) },
+        metricB: { label: "Reactions", value: formatNumber(data.totalReactions ?? 0) },
       };
+    }
     default:
       return base;
   }
 }
 
 function weekSeries(heatmap = []) {
-  if (!heatmap.length) return [];
-  // last 12 weeks of contributions, summed per week
+  if (!heatmap?.length) return [];
   const sorted = [...heatmap].sort((a, b) => a.date.localeCompare(b.date)).slice(-84);
   const weeks = [];
   for (let i = 0; i < sorted.length; i += 7) {
@@ -182,5 +228,10 @@ function weekSeries(heatmap = []) {
 }
 
 function solveSpark(solved = {}) {
-  return [solved.easy || 0, (solved.medium || 0) * 1.2, (solved.hard || 0) * 1.5, solved.total || 0];
+  return [
+    solved.easy || 0,
+    (solved.medium || 0) * 1.2,
+    (solved.hard || 0) * 1.5,
+    solved.total || 0,
+  ];
 }
