@@ -8,21 +8,6 @@
 import { useMemo } from "react";
 import SmartTasks from "./SmartTasks";
 
-/* ─── greeting helpers ──────────────────────────────────────── */
-
-const GREETINGS = {
-  0: "Burning the midnight oil",
-  5: "Good morning",
-  12: "Good afternoon",
-  17: "Good evening",
-  22: "Late night vibes",
-};
-function greeting() {
-  const h = new Date().getHours();
-  const keys = Object.keys(GREETINGS).map(Number).sort((a, b) => b - a);
-  return GREETINGS[keys.find((k) => h >= k) ?? 0];
-}
-
 /* ─── score computation ─────────────────────────────────────── */
 
 function computeScore(stats) {
@@ -44,7 +29,6 @@ function computeScore(stats) {
   const todayCodingH  = dayHours(wt.dailyHours, todayIso);
   const todayProblems = dayCount(lc.dailySubmissions, todayIso)
                       + dayCount(cf.dailySubmissions, todayIso)
-                      + dayCount(cc.dailySubmissions, todayIso)
                       + dayCount(ac.dailySubmissions, todayIso);
   const todayCommits  = dayCount(gh.contributions?.heatmap, todayIso);
 
@@ -52,7 +36,6 @@ function computeScore(stats) {
   const yCodingH  = dayHours(wt.dailyHours, yesterdayIso);
   const yProblems = dayCount(lc.dailySubmissions, yesterdayIso)
                   + dayCount(cf.dailySubmissions, yesterdayIso)
-                  + dayCount(cc.dailySubmissions, yesterdayIso)
                   + dayCount(ac.dailySubmissions, yesterdayIso);
   const yCommits  = dayCount(gh.contributions?.heatmap, yesterdayIso);
 
@@ -152,12 +135,11 @@ function ScoreRing({ score, level, label, delta }) {
 
 /* ─── main component ────────────────────────────────────────── */
 
-export default function TodayFocus({ user, stats = {} }) {
+export default function TodayFocus({ stats = {} }) {
   const { dailyScore, scoreLevel, scoreLabel, scoreDelta } = useMemo(
     () => computeScore(stats),
     [stats]
   );
-  const name = user?.name?.split(" ")[0] || user?.username || "Dev";
 
   /**
    * Scroll to the FocusMode panel and ask it to start its timer.
@@ -187,16 +169,8 @@ export default function TodayFocus({ user, stats = {} }) {
         style={{ background: "radial-gradient(circle, rgba(139,92,246,0.16) 0%, transparent 70%)" }} />
 
       <div className="relative px-5 py-4">
-        {/* Header row: greeting + CTA */}
-        <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
-          <div>
-            <h2 className="font-display font-bold text-xl leading-tight">
-              {greeting()}, {name} <span className="ml-1">👋</span>
-            </h2>
-            <p className="text-[12px] text-ink-faint italic mt-0.5">
-              "Code. Learn. Optimize. Repeat."
-            </p>
-          </div>
+        {/* Header row: CTA only; page header already owns the greeting. */}
+        <div className="flex items-start justify-end mb-4 gap-3 flex-wrap">
           <button
             onClick={startFocus}
             className="rounded-lg px-4 py-2 text-[12px] font-bold uppercase tracking-wider transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"

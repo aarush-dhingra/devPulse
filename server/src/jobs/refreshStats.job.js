@@ -7,6 +7,7 @@ const userModel = require("../models/user.model");
 const followModel = require("../models/follow.model");
 const badgeModel = require("../models/badge.model");
 const { recomputeForUser } = require("../services/score.service");
+const { assertUsableSnapshot } = require("../services/platformQuality.service");
 const { safeDel } = require("../config/redis");
 const { decrypt } = require("../utils/crypto");
 const logger = require("../utils/logger");
@@ -35,6 +36,13 @@ const FETCHERS = {
   wakatime: async (p) => wakatimeService.fetchAll({ encryptedApiKey: p.api_key }),
 };
 
+function normalizeBeforeSave(platform, data) {
+  if (platform === "gfg" || platform === "codechef") {
+    return assertUsableSnapshot(platform, data);
+  }
+  return data;
+}
+
 async function refreshUser(userId) {
   const platforms = await platformModel.listForUser(userId);
   const results = [];
@@ -46,7 +54,7 @@ async function refreshUser(userId) {
     const full = await platformModel.findOne(userId, p.platform_name);
     try {
       const t0 = Date.now();
-      const data = await fetcher(full);
+      const data = normalizeBeforeSave(p.platform_name, await fetcher(full));
       await statsModel.saveSnapshot({
         userId,
         platform: p.platform_name,

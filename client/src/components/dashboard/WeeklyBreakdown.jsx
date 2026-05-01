@@ -1,10 +1,10 @@
 /**
- * WeeklyBreakdown — pie / donut chart showing the distribution of activity
- * across all connected platforms for the selected period.
+ * WeeklyBreakdown — pie / donut chart showing the current platform totals
+ * used by the dashboard headline cards and platform detail pages.
  *
- * Each slice = one platform. Tooltip shows % share + total activity count
- * (problems / commits / hours). Color mapping is the same one used across
- * the rest of the dashboard.
+ * Each slice = one platform. These are not per-day deltas; for problem
+ * platforms they are lifetime solved totals, which keeps this card
+ * consistent with platform tabs.
  */
 import { useMemo, useState } from "react";
 import {
@@ -18,8 +18,8 @@ import PlatformLogo from "../ui/PlatformLogo";
 
 const PLATFORM_META = {
   github:     { label: "GitHub",        color: "#f0f6fc", unit: "contributions" },
-  leetcode:   { label: "LeetCode",      color: "#ffa116", unit: "submissions"   },
-  codeforces: { label: "Codeforces",    color: "#fe646f", unit: "submissions"   },
+  leetcode:   { label: "LeetCode",      color: "#ffa116", unit: "solved"        },
+  codeforces: { label: "Codeforces",    color: "#fe646f", unit: "solved"        },
   gfg:        { label: "GeeksForGeeks", color: "#2f8d46", unit: "problems"      },
   codechef:   { label: "CodeChef",      color: "#5b4638", unit: "problems"      },
   atcoder:    { label: "AtCoder",       color: "#b0c4de", unit: "problems"      },
@@ -121,7 +121,7 @@ export default function WeeklyBreakdown({ heatmap, period }) {
           <div className="font-display font-bold text-xl tabular-nums">
             {Math.round(totalUnits).toLocaleString()}
           </div>
-          <div className="text-[10px] text-ink-faint">units</div>
+          <div className="text-[10px] text-ink-faint">mixed units</div>
         </div>
       </div>
 
@@ -169,7 +169,7 @@ function PieTip({ active, payload }) {
         <span className="font-semibold text-ink">{p.name}</span>
       </div>
       <div className="flex items-center justify-between gap-4 text-ink-muted">
-        <span>Activity</span>
+        <span>Total</span>
         <span className="text-ink font-medium tabular-nums">{fmtValue(p.key, p.value)}</span>
       </div>
       <div className="flex items-center justify-between gap-4 text-ink-muted">
@@ -191,3 +191,4 @@ function labelForPeriod(period) {
     default:    return "selected range";
   }
 }
+

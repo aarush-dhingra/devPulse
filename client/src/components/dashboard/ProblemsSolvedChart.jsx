@@ -1,9 +1,9 @@
 /**
- * ProblemsSolvedChart — daily/weekly stacked bars (Easy/Medium/Hard)
+ * ProblemsSolvedChart — daily/weekly problem activity bars (Easy/Medium/Hard)
  * with an overlay "Total" line.
  *
- * The server provides exact per-difficulty counts via snapshot deltas,
- * so no client-side approximation is needed.
+ * Snapshot deltas are exact where available. Historical LeetCode calendar
+ * fallback is submission activity, so the UI labels this as activity.
  */
 import { useMemo, useState } from "react";
 import {
@@ -29,6 +29,13 @@ const DIFF_META = {
 const TOTAL_COLOR    = "#a78bfa";
 const BEST_COLOR     = "#fbbf24";
 const ZERO_COLOR     = "rgba(148,163,184,0.45)";
+const PLATFORM_META = {
+  leetcode:   { label: "LeetCode activity", color: "#ffa116" },
+  codeforces: { label: "Codeforces accepted", color: "#fe646f" },
+  gfg:        { label: "GFG verified activity", color: "#22c55e" },
+  codechef:   { label: "CodeChef verified activity", color: "#5b4638" },
+  atcoder:    { label: "AtCoder accepted", color: "#b0c4de" },
+};
 
 const VIEW = [
   { id: "daily",  label: "Daily" },
@@ -45,18 +52,35 @@ function shortDate(d, weekly = false) {
 
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload || {};
   const easy   = payload.find((p) => p.dataKey === "easy")?.value   || 0;
   const medium = payload.find((p) => p.dataKey === "medium")?.value || 0;
   const hard   = payload.find((p) => p.dataKey === "hard")?.value   || 0;
   const total  = easy + medium + hard;
   if (!total) return null;
+  const platformRows = Object.entries(row.breakdown || {})
+    .filter(([, v]) => Number(v) > 0);
 
   return (
     <div
       className="rounded-xl border border-white/10 shadow-2xl text-[11px]"
-      style={{ background: "#111", padding: "8px 12px", minWidth: 150 }}
+      style={{ background: "#111", padding: "8px 12px", minWidth: 170 }}
     >
       <div className="font-semibold text-ink mb-1.5">{shortDate(label)}</div>
+      {platformRows.length > 0 && (
+        <div className="mb-1.5 pb-1.5 border-b border-white/[0.08]">
+          {platformRows.map(([k, v]) => {
+            const meta = PLATFORM_META[k] || { label: k, color: TOTAL_COLOR };
+            return (
+              <div key={k} className="flex items-center gap-2 text-ink-muted mb-1">
+                <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: meta.color }} />
+                <span className="flex-1">{meta.label}</span>
+                <span className="text-ink font-medium tabular-nums">{v}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {Object.entries({ easy, medium, hard }).map(([k, v]) => (
         v > 0 && (
           <div key={k} className="flex items-center gap-2 text-ink-muted mb-1">
@@ -87,6 +111,7 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
       medium: Number(d.medium || 0),
       hard:   Number(d.hard   || 0),
       total:  Number(d.total  || 0),
+      breakdown: d.breakdown || {},
     }));
   }, [series]);
 
@@ -98,11 +123,17 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
       const mon = new Date(dt);
       mon.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
       const key = mon.toISOString().slice(0, 10);
-      if (!buckets[key]) buckets[key] = { date: key, easy: 0, medium: 0, hard: 0, total: 0 };
+      if (!buckets[key]) {
+        buckets[key] = { date: key, easy: 0, medium: 0, hard: 0, total: 0, breakdown: {} };
+      }
       buckets[key].easy   += d.easy;
       buckets[key].medium += d.medium;
       buckets[key].hard   += d.hard;
       buckets[key].total  += d.total;
+      for (const [platform, value] of Object.entries(d.breakdown || {})) {
+        buckets[key].breakdown[platform] =
+          (buckets[key].breakdown[platform] || 0) + Number(value || 0);
+      }
     }
     return Object.values(buckets).sort((a, b) => a.date.localeCompare(b.date));
   }, [dailyData, viewMode]);
@@ -132,7 +163,7 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <h3 className="font-display font-bold text-base">Problems Solved</h3>
+          <h3 className="font-display font-bold text-base">Problem Activity</h3>
           {hasData && (
             <span className="pill-accent !py-0.5 !text-[10px]">{grandTotal} · {periodLbl}</span>
           )}
@@ -183,7 +214,7 @@ export default function ProblemsSolvedChart({ series = [], period = "90d" }) {
       {!hasData ? (
         <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
           <div className="text-3xl opacity-40">📈</div>
-          <p className="text-sm font-medium text-ink-muted">No problem-solving data yet</p>
+          <p className="text-sm font-medium text-ink-muted">No problem activity yet</p>
           <p className="text-[11px] text-ink-faint max-w-[220px]">
             Solve problems on <strong>LeetCode</strong>, <strong>Codeforces</strong>, <strong>CodeChef</strong>, <strong>AtCoder</strong>, or <strong>GFG</strong> then hit Refresh to see your progress
           </p>

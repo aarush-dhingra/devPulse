@@ -1,7 +1,9 @@
 "use strict";
 
+const cheerio = require("cheerio");
 const { createApiClient } = require("../utils/apiClient");
 const { safeNum } = require("../utils/formatters");
+const { assertUsableSnapshot } = require("./platformQuality.service");
 const logger = require("../utils/logger");
 
 const scraper = createApiClient({
@@ -23,6 +25,8 @@ const ratingApi = createApiClient({
 });
 
 function parseProfileHtml(html, username) {
+  const $ = cheerio.load(html);
+  const text = $("body").text();
   const result = {
     profile: { username },
     rating: 0,
@@ -35,23 +39,55 @@ function parseProfileHtml(html, username) {
     color: null,
     ratingHistory: [],
     contests: [],
+    source: "codechef-profile-html",
     fetchedAt: new Date().toISOString(),
   };
 
-  const totalMatch = html.match(/Total Problems Solved:\s*(\d+)/i);
+  const fullName =
+    $(".user-details-container .h2-style").first().text().trim() ||
+    $(".user-details-container h1").first().text().trim() ||
+    $(".h2-style").first().text().trim();
+  if (fullName) result.profile.name = fullName;
+
+  const avatar =
+    $(".profileImage").attr("src") ||
+    $(".user-details-container img").first().attr("src") ||
+    null;
+  if (avatar) result.profile.avatar = avatar;
+
+  const country =
+    $(".user-country-name").first().text().trim() ||
+    $(".user-details-container .country").first().text().trim();
+  if (country) result.profile.country = country;
+
+  const institution =
+    $(".user-institution").first().text().trim() ||
+    $(".user-details-container .institution").first().text().trim();
+  if (institution) result.profile.institution = institution;
+
+  const ratingText = $(".rating-number").first().text().trim();
+  if (ratingText) result.rating = safeNum(ratingText.replace(/[^\d]/g, ""));
+
+  const ratingColorClass = $(".rating-header .rating").first().attr("class") ||
+    $(".rating").first().attr("class") ||
+    "";
+  const colorMatch = ratingColorClass.match(/(?:rating|star)-?([a-z]+)/i);
+  if (colorMatch) result.color = colorMatch[1];
+
+  const totalMatch = text.match(/Total Problems Solved:\s*(\d+)/i) ||
+    html.match(/Total Problems Solved:\s*(\d+)/i);
   if (totalMatch) result.problemsSolved = safeNum(totalMatch[1]);
 
-  const ratingMatch = html.match(/class="rating-number">(\d+)/);
-  if (ratingMatch) result.rating = safeNum(ratingMatch[1]);
+  const partialMatch = text.match(/Partially Solved:\s*(\d+)/i) ||
+    text.match(/Partial Problems Solved:\s*(\d+)/i);
+  if (partialMatch) result.partialProblems = safeNum(partialMatch[1]);
 
-  const avatarMatch = html.match(/class=['"]profileImage['"][^>]*src=['"]([^'"]+)['"]/);
-  if (avatarMatch) result.profile.avatar = avatarMatch[1];
-
-  const countryMatch = html.match(/class="user-country-name"[^>]*>\s*([^<]+)/);
-  if (countryMatch) result.profile.country = countryMatch[1].trim();
-
-  const nameMatch = html.match(/class="h2-style">([^<]+)/);
-  if (nameMatch) result.profile.username = nameMatch[1].trim();
+  $(".rating-ranks li, .rating-ranks .inline-list li, .rank-stats li").each((_, el) => {
+    const rowText = $(el).text().replace(/\s+/g, " ").trim();
+    const number = safeNum(rowText.replace(/[^\d]/g, ""));
+    if (/global/i.test(rowText)) result.globalRank = number;
+    if (/country/i.test(rowText)) result.countryRank = number;
+  });
 
   const ratingHistoryMatch = html.match(/var\s+all_rating\s*=\s*(\[.*?\]);/s);
   if (ratingHistoryMatch) {
@@ -73,10 +109,73 @@ function parseProfileHtml(html, username) {
     }
   }
 
-  const starsMatch = html.match(/class="rating"[^>]*>\s*(\d)\s*\u2605/);
+  const starsText = $(".rating").first().text().trim() ||
+    $(".rating-header").first().text().trim();
+  const starsMatch = starsText.match(/(\d)\s*\u2605/) ||
+    html.match(/class="rating"[^>]*>\s*(\d)\s*\u2605/);
   if (starsMatch) result.stars = safeNum(starsMatch[1]);
 
   return result;
+}
+
+function augmentFromApi(shaped, apiData = {}) {
+  if (!apiData || typeof apiData !== "object") return shaped;
+
+  if (!shaped.rating && safeNum(apiData.rating))
+    shaped.rating = safeNum(apiData.rating);
+  if (!shaped.stars && safeNum(apiData.stars))
+    shaped.stars = safeNum(apiData.stars);
+  if (!shaped.globalRank && safeNum(apiData.globalRank))
+    shaped.globalRank = safeNum(apiData.globalRank);
+  if (!shaped.countryRank && safeNum(apiData.countryRank))
+    shaped.countryRank = safeNum(apiData.countryRank);
+  if (!shaped.problemsSolved && safeNum(apiData.problemsSolved))
+    shaped.problemsSolved = safeNum(apiData.problemsSolved);
+  if (!shaped.partialProblems && safeNum(apiData.partialProblems))
+    shaped.partialProblems = safeNum(apiData.partialProblems);
+  if (!shaped.profile.avatar && apiData.avatar)
+    shaped.profile.avatar = apiData.avatar;
+  if (!shaped.profile.country && apiData.country)
+    shaped.profile.country = apiData.country;
+  if (!shaped.contestsAttended && safeNum(apiData.participation))
+    shaped.contestsAttended = safeNum(apiData.participation);
+  if (!shaped.contests.length && Array.isArray(apiData.contests))
+    shaped.contests = apiData.contests;
+
+  return shaped;
+}
+
+function shapeFromRatingApi(data, username) {
+  return {
+    profile: {
+      username: data.username || username,
+      name: data.name || data.fullName || null,
+      avatar: data.avatar || null,
+      country: data.country || null,
+      institution: data.institution || null,
+    },
+    rating: safeNum(data.rating ?? data.currentRating),
+    stars: safeNum(data.stars),
+    globalRank: safeNum(data.globalRank),
+    countryRank: safeNum(data.countryRank),
+    problemsSolved: safeNum(data.problemsSolved),
+    partialProblems: safeNum(data.partialProblems),
+    contestsAttended: safeNum(data.participation ?? data.totalContests),
+    color: data.color || null,
+    ratingHistory: Array.isArray(data.ratingHistory) ? data.ratingHistory : [],
+    contests: Array.isArray(data.contests) ? data.contests : [],
+    source: "codechef-rating-api",
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+function tryUsable(shaped) {
+  if (!shaped) return null;
+  try {
+    return assertUsableSnapshot("codechef", shaped);
+  } catch {
+    return null;
+  }
 }
 
 async function fetchAll(usernameRaw) {
@@ -94,32 +193,20 @@ async function fetchAll(usernameRaw) {
     const { data: html } = await scraper.get(
       `/users/${encodeURIComponent(username)}`
     );
-    if (typeof html === "string" && html.includes("Problems Solved")) {
+    if (typeof html === "string" && /Problems Solved|rating-number|user-details/i.test(html)) {
       const shaped = parseProfileHtml(html, username);
-      if (shaped.problemsSolved > 0 || shaped.rating > 0) {
+      if (shaped.problemsSolved > 0 || shaped.rating > 0 || shaped.profile?.name) {
         // Augment with cp-rating-api for extra fields (stars, rank) if available
         try {
           const { data: apiData } = await ratingApi.get(
             `/codechef/${encodeURIComponent(username)}`
           );
-          if (apiData) {
-            if (!shaped.stars && safeNum(apiData.stars))
-              shaped.stars = safeNum(apiData.stars);
-            if (!shaped.globalRank && safeNum(apiData.globalRank))
-              shaped.globalRank = safeNum(apiData.globalRank);
-            if (!shaped.countryRank && safeNum(apiData.countryRank))
-              shaped.countryRank = safeNum(apiData.countryRank);
-            if (!shaped.profile.avatar && apiData.avatar)
-              shaped.profile.avatar = apiData.avatar;
-            if (!shaped.profile.country && apiData.country)
-              shaped.profile.country = apiData.country;
-            if (!shaped.contestsAttended && safeNum(apiData.participation))
-              shaped.contestsAttended = safeNum(apiData.participation);
-          }
+          augmentFromApi(shaped, apiData);
         } catch {
           // Non-critical — we already have the main data from HTML
         }
-        return shaped;
+        const trusted = tryUsable(shaped);
+        if (trusted) return trusted;
       }
       errors.push("HTML scrape found page but no solved/rating data");
     } else {
@@ -135,26 +222,8 @@ async function fetchAll(usernameRaw) {
     const { data } = await ratingApi.get(
       `/codechef/${encodeURIComponent(username)}`
     );
-    if (data && (safeNum(data.problemsSolved) > 0 || safeNum(data.rating) > 0)) {
-      return {
-        profile: {
-          username: data.username || username,
-          avatar: data.avatar || null,
-          country: data.country || null,
-        },
-        rating: safeNum(data.rating),
-        stars: safeNum(data.stars),
-        globalRank: safeNum(data.globalRank),
-        countryRank: safeNum(data.countryRank),
-        problemsSolved: safeNum(data.problemsSolved),
-        partialProblems: safeNum(data.partialProblems),
-        contestsAttended: safeNum(data.participation),
-        color: data.color || null,
-        ratingHistory: [],
-        contests: Array.isArray(data.contests) ? data.contests : [],
-        fetchedAt: new Date().toISOString(),
-      };
-    }
+    const shaped = tryUsable(shapeFromRatingApi(data || {}, username));
+    if (shaped) return shaped;
     errors.push("cp-rating-api returned no usable data");
   } catch (err) {
     errors.push(`cp-rating-api: ${err.message}`);

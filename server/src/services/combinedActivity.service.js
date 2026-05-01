@@ -1,6 +1,7 @@
 "use strict";
 
 const statsModel = require("../models/stats.model");
+const { buildQuality } = require("./platformQuality.service");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -36,9 +37,18 @@ function emptyMap(dates) {
  * `extractor(raw_data)` → `{ easy: N, medium: N, ... }` (cumulative).
  * Returns `{ "2026-05-01": { easy: 3, medium: 0, ... }, ... }`.
  */
-function snapshotDeltas(snapshots, extractor) {
+function snapshotDeltas(snapshots, extractor, { includeInitial = false } = {}) {
   const dayMap = {};
-  if (!snapshots || snapshots.length < 2) return dayMap;
+  if (!snapshots || snapshots.length < 1) return dayMap;
+
+  if (includeInitial) {
+    const first = extractor(snapshots[0].raw_data);
+    const firstDay = dateKey(new Date(snapshots[0].created_at));
+    const hasInitial = Object.values(first).some((v) => Number(v || 0) > 0);
+    if (hasInitial) dayMap[firstDay] = { ...first };
+  }
+
+  if (snapshots.length < 2) return dayMap;
 
   let prev = extractor(snapshots[0].raw_data);
   for (let i = 1; i < snapshots.length; i += 1) {
@@ -89,6 +99,40 @@ function codechefExtractor(raw) {
   return { total: Number(raw?.problemsSolved || 0) };
 }
 
+function hasTrustedCumulativeMetric(platform, raw) {
+  const quality = raw?.quality || buildQuality(platform, raw);
+  if (!quality.valid || quality.confidence === "profile-only") return false;
+
+  if (platform === "gfg") {
+    return (
+      Number(raw?.problemsSolved || 0) > 0 ||
+      Number(raw?.score || 0) > 0 ||
+      Number(raw?.streak || 0) > 0 ||
+      Number(raw?.maxStreak || 0) > 0 ||
+      Number(raw?.monthlyScore || 0) > 0
+    );
+  }
+
+  if (platform === "codechef") {
+    return (
+      Number(raw?.problemsSolved || 0) > 0 ||
+      Number(raw?.partialProblems || 0) > 0 ||
+      Number(raw?.rating || 0) > 0 ||
+      Number(raw?.contestsAttended || 0) > 0 ||
+      (Array.isArray(raw?.ratingHistory) && raw.ratingHistory.length > 0)
+    );
+  }
+
+  return true;
+}
+
+function trustedHistory(platform, snapshots = []) {
+  if (platform !== "gfg" && platform !== "codechef") return snapshots;
+  return snapshots.filter((snapshot) =>
+    hasTrustedCumulativeMetric(platform, snapshot.raw_data)
+  );
+}
+
 function atcoderExtractor(raw) {
   return { total: Number(raw?.uniqueSolved || 0) };
 }
@@ -136,9 +180,12 @@ function bucketWakatime(stats) {
 }
 
 async function bucketGfgFromHistory(userId) {
-  const history = await statsModel.getHistory(userId, "gfg", 60);
-  if (!history || history.length < 2) return {};
-  const deltas = snapshotDeltas(history, gfgExtractor);
+  const history = trustedHistory(
+    "gfg",
+    await statsModel.getHistory(userId, "gfg", 60)
+  );
+  if (!history || history.length < 1) return {};
+  const deltas = snapshotDeltas(history, gfgExtractor, { includeInitial: true });
   const m = {};
   for (const [day, d] of Object.entries(deltas)) {
     if (d.total > 0) m[day] = d.total;
@@ -147,9 +194,12 @@ async function bucketGfgFromHistory(userId) {
 }
 
 async function bucketCodechefFromHistory(userId) {
-  const history = await statsModel.getHistory(userId, "codechef", 60);
-  if (!history || history.length < 2) return {};
-  const deltas = snapshotDeltas(history, codechefExtractor);
+  const history = trustedHistory(
+    "codechef",
+    await statsModel.getHistory(userId, "codechef", 60)
+  );
+  if (!history || history.length < 1) return {};
+  const deltas = snapshotDeltas(history, codechefExtractor, { includeInitial: true });
   const m = {};
   for (const [day, d] of Object.entries(deltas)) {
     if (d.total > 0) m[day] = d.total;
@@ -297,23 +347,14 @@ async function buildProblemsSeries(userId, days = 90) {
     ["leetcode", "codeforces", "gfg", "codechef", "atcoder"],
     60
   );
+  history.gfg = trustedHistory("gfg", history.gfg || []);
+  history.codechef = trustedHistory("codechef", history.codechef || []);
 
   const lcDeltas       = snapshotDeltas(history.leetcode   || [], lcExtractor);
   const cfDeltas       = snapshotDeltas(history.codeforces || [], cfExtractor);
-  const gfgDeltas      = snapshotDeltas(history.gfg        || [], gfgExtractor);
-  const codechefDeltas = snapshotDeltas(history.codechef   || [], codechefExtractor);
+  const gfgDeltas      = snapshotDeltas(history.gfg        || [], gfgExtractor, { includeInitial: true });
+  const codechefDeltas = snapshotDeltas(history.codechef   || [], codechefExtractor, { includeInitial: true });
   const atcoderDeltas  = snapshotDeltas(history.atcoder    || [], atcoderExtractor);
-
-  const deltasDates = new Set([
-    ...Object.keys(lcDeltas),
-    ...Object.keys(cfDeltas),
-    ...Object.keys(gfgDeltas),
-    ...Object.keys(codechefDeltas),
-    ...Object.keys(atcoderDeltas),
-  ]);
-
-  /* ── calendar fallback (historical data before first snapshot) ── */
-  const firstSnapshotDate = findFirstSnapshotDate(history);
 
   const lcCalendar = {};
   for (const d of stats?.leetcode?.dailySubmissions || []) {
@@ -337,61 +378,53 @@ async function buildProblemsSeries(userId, days = 90) {
 
   /* ── merge: deltas take priority, calendar fills gaps ── */
   const daily = dates.map((date) => {
-    if (deltasDates.has(date)) {
-      const lc  = lcDeltas[date]       || {};
-      const cf  = cfDeltas[date]       || {};
-      const gfg = gfgDeltas[date]      || {};
-      const cc  = codechefDeltas[date] || {};
-      const ac  = atcoderDeltas[date]  || {};
-      const easy   = Number(lc.easy   || 0) + Number(gfg.total || 0) + Number(cc.total || 0);
-      const medium = Number(lc.medium || 0);
-      const hard   = Number(lc.hard   || 0) + Number(cf.total  || 0) + Number(ac.total || 0);
-      return { date, easy, medium, hard, total: easy + medium + hard };
-    }
+    const lcDelta = lcDeltas[date];
+    const lcCount = lcDelta
+      ? Number(lcDelta.total || 0)
+      : Number(lcCalendar[date] || 0);
+    const lcEasy = lcDelta
+      ? Number(lcDelta.easy || 0)
+      : Math.round(lcCount * lcRatio.easy);
+    const lcMedium = lcDelta
+      ? Number(lcDelta.medium || 0)
+      : Math.round(lcCount * lcRatio.medium);
+    const lcHard = lcDelta
+      ? Number(lcDelta.hard || 0)
+      : Math.max(0, lcCount - lcEasy - lcMedium);
 
-    if (firstSnapshotDate && date >= firstSnapshotDate) {
-      return { date, ...emptyRow() };
-    }
+    const cfTotal = cfDeltas[date]
+      ? Number(cfDeltas[date].total || 0)
+      : Number(cfCalendar[date] || 0);
+    const acTotal = atcoderDeltas[date]
+      ? Number(atcoderDeltas[date].total || 0)
+      : Number(atcoderCalendar[date] || 0);
+    const gfgTotal = Number(gfgDeltas[date]?.total || 0);
+    const codechefTotal = Number(codechefDeltas[date]?.total || 0);
 
-    const lcCount = lcCalendar[date] || 0;
-    const cfCount = cfCalendar[date] || 0;
-    const acCount = atcoderCalendar[date] || 0;
-    if (lcCount === 0 && cfCount === 0 && acCount === 0) return { date, ...emptyRow() };
+    const easy = lcEasy + gfgTotal + codechefTotal;
+    const medium = lcMedium;
+    const hard = lcHard + cfTotal + acTotal;
+    const total = easy + medium + hard;
 
-    const easy   = Math.round(lcCount * lcRatio.easy);
-    const medium = Math.round(lcCount * lcRatio.medium);
-    const hard   = Math.max(0, lcCount - easy - medium) + cfCount + acCount;
-    return { date, easy, medium, hard, total: easy + medium + hard };
+    if (total === 0) return { date, ...emptyRow(), breakdown: {} };
+
+    return {
+      date,
+      easy,
+      medium,
+      hard,
+      total,
+      breakdown: {
+        leetcode: lcCount,
+        codeforces: cfTotal,
+        gfg: gfgTotal,
+        codechef: codechefTotal,
+        atcoder: acTotal,
+      },
+    };
   });
 
-  if (days > 90) {
-    const weekMap = {};
-    for (const d of daily) {
-      const dt = new Date(d.date + "T00:00:00Z");
-      const dow = dt.getUTCDay();
-      const monday = new Date(dt.getTime() - ((dow + 6) % 7) * DAY_MS);
-      const wk = dateKey(monday);
-      if (!weekMap[wk]) weekMap[wk] = { date: wk, ...emptyRow() };
-      weekMap[wk].easy   += d.easy;
-      weekMap[wk].medium += d.medium;
-      weekMap[wk].hard   += d.hard;
-      weekMap[wk].total  += d.total;
-    }
-    return Object.values(weekMap).sort((a, b) => a.date.localeCompare(b.date));
-  }
-
   return daily;
-}
-
-function findFirstSnapshotDate(history) {
-  let earliest = null;
-  for (const snaps of Object.values(history || {})) {
-    if (Array.isArray(snaps) && snaps.length > 0) {
-      const d = dateKey(new Date(snaps[0].created_at));
-      if (!earliest || d < earliest) earliest = d;
-    }
-  }
-  return earliest;
 }
 
 /* ─── buildCodingTimeSeries ──────────────────────────────────────── */

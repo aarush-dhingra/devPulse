@@ -40,11 +40,17 @@ async function getLatestForPlatform(userId, platform) {
 
 async function getHistory(userId, platform, limit = 60) {
   const { rows } = await db.query(
-    `SELECT raw_data, created_at
-     FROM stats_snapshots
-     WHERE user_id = $1 AND platform = $2
-     ORDER BY created_at ASC
-     LIMIT $3`,
+    `
+    SELECT raw_data, created_at
+    FROM (
+      SELECT raw_data, created_at
+      FROM stats_snapshots
+      WHERE user_id = $1 AND platform = $2
+      ORDER BY created_at DESC
+      LIMIT $3
+    ) recent
+    ORDER BY created_at ASC
+    `,
     [userId, platform, limit]
   );
   return rows;
@@ -52,12 +58,24 @@ async function getHistory(userId, platform, limit = 60) {
 
 async function getMultiPlatformHistory(userId, platforms, limit = 60) {
   const { rows } = await db.query(
-    `SELECT platform, raw_data, created_at
-     FROM stats_snapshots
-     WHERE user_id = $1 AND platform = ANY($2::text[])
-     ORDER BY created_at ASC
-     LIMIT $3`,
-    [userId, platforms, limit * platforms.length]
+    `
+    WITH ranked AS (
+      SELECT
+        platform,
+        raw_data,
+        created_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY platform ORDER BY created_at DESC
+        ) AS rn
+      FROM stats_snapshots
+      WHERE user_id = $1 AND platform = ANY($2::text[])
+    )
+    SELECT platform, raw_data, created_at
+    FROM ranked
+    WHERE rn <= $3
+    ORDER BY platform, created_at ASC
+    `,
+    [userId, platforms, limit]
   );
   const grouped = {};
   for (const p of platforms) grouped[p] = [];
