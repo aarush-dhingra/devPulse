@@ -43,77 +43,10 @@ function normalizeBeforeSave(platform, data) {
   return data;
 }
 
-function normalizeTitle(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function difficultyCount(raw, difficulty) {
-  const details = raw?.solvedDetails || {};
-  return Number(details[difficulty] || details[difficulty.toUpperCase()] || 0);
-}
-
-function deriveGfgRecentSolves(previous, current) {
-  const currentLists = current?.solvedProblems || {};
-  const previousLists = previous?.solvedProblems || {};
-  const derived = [];
-  const today = new Date().toISOString().slice(0, 10);
-
-  for (const difficulty of ["school", "basic", "easy", "medium", "hard"]) {
-    const currentProblems = currentLists[difficulty] || [];
-    if (!currentProblems.length) continue;
-
-    const previousTitles = new Set(
-      (previousLists[difficulty] || []).map((problem) => normalizeTitle(problem.title))
-    );
-    const countDelta = Math.max(
-      0,
-      difficultyCount(current, difficulty) - difficultyCount(previous, difficulty)
-    );
-
-    const newProblems = currentProblems.filter((problem) => {
-      const title = normalizeTitle(problem.title);
-      return title && !previousTitles.has(title);
-    });
-    const selected = newProblems.length
-      ? newProblems
-      : countDelta > 0
-        ? currentProblems.slice(0, countDelta)
-        : [];
-
-    for (const problem of selected.slice(0, Math.max(countDelta, selected.length))) {
-      derived.push({
-        type: "solved",
-        title: problem.title,
-        difficulty,
-        date: today,
-        url: problem.url,
-        source: "gfg-breakdown-diff",
-      });
-    }
-  }
-
-  return derived;
-}
-
 async function enrichGfgBeforeSave(userId, data) {
-  // Merge snapshot-delta derived activity with any activity already in the data.
-  // The fallback that used to stamp all solvedProblems with today's date has been
-  // removed — it produced garbage recentActivity with wrong dates.
-  const previous = await statsModel.getLatestForPlatform(userId, "gfg");
-  const derived = deriveGfgRecentSolves(previous, data);
-  if (!derived.length) return data;
-
-  const seen = new Set();
-  const recentActivity = [...derived, ...(data.recentActivity || [])]
-    .filter((item) => {
-      const key = `${item.type || "activity"}:${normalizeTitle(item.title)}:${item.date || ""}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 20);
-
-  return { ...data, recentActivity };
+  // recentActivity is now populated with real submission dates directly from the
+  // GFG submissions API (user_subtime). No further enrichment is needed here.
+  return data;
 }
 
 async function refreshUser(userId) {

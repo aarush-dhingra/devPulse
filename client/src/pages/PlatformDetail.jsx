@@ -25,7 +25,7 @@ import Sparkline from "../components/dashboard/Sparkline";
 import StatCard from "../components/dashboard/StatCard";
 import CodingHoursChart from "../components/dashboard/CodingHoursChart";
 import SolveBreakdown from "../components/dashboard/SolveBreakdown";
-import DateRangeBar from "../components/dashboard/DateRangeBar";
+import DateRangeBar, { periodToDays } from "../components/dashboard/DateRangeBar";
 import EmptyState from "../components/ui/EmptyState";
 import Button from "../components/ui/Button";
 import { PLATFORM_BY_ID, colorForLang } from "../utils/constants";
@@ -227,16 +227,18 @@ function GitHubHeatmapPanel({ command, period }) {
       </div>
     );
   }
-  const { weeks, p95 } = heatmapWeeks(command.rows);
+  const { weeks, p95 } = heatmapWeeks(command.rows, periodToDays(period));
 
   // Build month labels (show month name above first week of each new month)
   const monthLabels = [];
+  let lastGhMonth = null;
   weeks.forEach((week, wi) => {
     const firstReal = week.find(Boolean);
     if (!firstReal) return;
-    const d = new Date(`${firstReal.date}T00:00:00Z`);
-    const isFirstWeekOfMonth = d.getUTCDate() <= 7;
-    if (isFirstWeekOfMonth) {
+    const m = firstReal.date.slice(5, 7);
+    if (m !== lastGhMonth) {
+      lastGhMonth = m;
+      const d = new Date(`${firstReal.date}T00:00:00Z`);
       monthLabels.push({ x: wi * 15, label: d.toLocaleString("default", { month: "short" }) });
     }
   });
@@ -795,35 +797,36 @@ function LeetCodeConsistencyCard({ command }) {
   );
 }
 
+const LC_CELL = { "7d": 26, "30d": 18, "90d": 13, "1y": 11 };
+const LC_GAP  = { "7d":  6, "30d":  4, "90d":  3, "1y":  2 };
+
 function LeetCodeHeatmapPanel({ command, accent, period }) {
-  if (!command.rows.length || command.total <= 0) {
-    return (
-      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
-        <h3 className="font-display font-bold text-base mb-2">Problem Solving Activity</h3>
-        <EmptyState icon="📅" title="No activity" description="Refresh after your next solve." />
-      </div>
-    );
-  }
   const LC_GREEN = "#22c55e";
-  const { weeks, p95 } = heatmapWeeks(command.rows);
-  const svgW = weeks.length * 15 + 30;
-  const svgH = 118;
-  // Month label positions: track first week of each month for "1y" period
+  const days = periodToDays(period);
+  const { weeks, p95 } = heatmapWeeks(command.rows, days);
+
+  const cell = LC_CELL[period] ?? 13;
+  const gap  = LC_GAP[period]  ?? 3;
+  const step = cell + gap;
+  const LEFT = 28;
+
+  // Month labels — first week of each new month
   const monthLabels = [];
-  if (period === "1y") {
-    let lastMonth = null;
-    weeks.forEach((week, wi) => {
-      const firstDate = week.find(Boolean)?.date;
-      if (firstDate) {
-        const m = firstDate.slice(5, 7);
-        if (m !== lastMonth) {
-          lastMonth = m;
-          monthLabels.push({ wi, label: new Date(`${firstDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short" }) });
-        }
+  let lastMonth = null;
+  weeks.forEach((week, wi) => {
+    const firstDate = week.find(Boolean)?.date;
+    if (firstDate) {
+      const m = firstDate.slice(5, 7);
+      if (m !== lastMonth) {
+        lastMonth = m;
+        monthLabels.push({ wi, label: new Date(`${firstDate}T00:00:00Z`).toLocaleString("default", { month: "short" }) });
       }
-    });
-  }
-  const topOffset = monthLabels.length ? 22 : 8;
+    }
+  });
+  const topOffset = monthLabels.length > 1 ? 20 : 6;
+  const svgW = Math.max(weeks.length * step + LEFT, 120);
+  const svgH = topOffset + 7 * step + 4;
+
   return (
     <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
       <div className="mb-4 flex items-center justify-between gap-2">
@@ -831,38 +834,38 @@ function LeetCodeHeatmapPanel({ command, accent, period }) {
         <span className="text-[10px] text-ink-faint">{PERIOD_COPY[period] || "range"}</span>
       </div>
       <div className="overflow-x-auto">
-        <div className="mx-auto" style={{ width: "fit-content" }}>
-          <svg width={svgW} height={monthLabels.length ? svgH + 14 : svgH} className="block">
-            {/* Month labels (1y only) */}
-            {monthLabels.map(({ wi, label }) => (
-              <text key={label + wi} x={30 + wi * 15} y={12} fill="rgba(148,163,184,0.55)" fontSize="9">{label}</text>
-            ))}
-            {/* Day-of-week labels */}
-            {["Mon", "Wed", "Fri"].map((day, i) => (
-              <text key={day} x="0" y={topOffset + 22 + i * 30} fill="rgba(148,163,184,0.65)" fontSize="10">{day}</text>
-            ))}
-            <g transform={`translate(30,${topOffset})`}>
-              {weeks.map((week, wi) =>
-                week.map((day, di) => {
-                  if (!day) return null;
-                  return (
-                    <rect
-                      key={`${day.date}-${wi}-${di}`}
-                      x={wi * 15}
-                      y={di * 15}
-                      width={12}
-                      height={12}
-                      rx={3}
-                      fill={activityColor(LC_GREEN, bucket(day.count, p95))}
-                    >
-                      <title>{`${day.date}: ${day.count} solves`}</title>
-                    </rect>
-                  );
-                })
-              )}
-            </g>
-          </svg>
-        </div>
+        <svg width={svgW} height={svgH} className="block">
+          {/* Month labels */}
+          {monthLabels.length > 1 && monthLabels.map(({ wi, label }) => (
+            <text key={`m-${label}-${wi}`} x={LEFT + wi * step} y={12} fill="rgba(148,163,184,0.55)" fontSize="9">{label}</text>
+          ))}
+          {/* Day-of-week labels */}
+          {["Mon", "Wed", "Fri"].map((day, i) => (
+            <text key={day} x={0} y={topOffset + i * 2 * step + cell - 1} fill="rgba(148,163,184,0.65)" fontSize="9">{day}</text>
+          ))}
+          <g transform={`translate(${LEFT},${topOffset})`}>
+            {weeks.map((week, wi) =>
+              week.map((day, di) => {
+                if (!day) return null;
+                const level = bucket(day.count, p95);
+                return (
+                  <rect
+                    key={`${wi}-${di}`}
+                    x={wi * step}
+                    y={di * step}
+                    width={cell}
+                    height={cell}
+                    rx={Math.max(2, Math.round(cell * 0.28))}
+                    fill={level > 0 ? activityColor(LC_GREEN, level) : "rgba(255,255,255,0.05)"}
+                    stroke={level > 0 ? "rgba(255,255,255,0.06)" : "transparent"}
+                  >
+                    <title>{`${day.date}: ${day.count} solve${day.count !== 1 ? "s" : ""}`}</title>
+                  </rect>
+                );
+              })
+            )}
+          </g>
+        </svg>
       </div>
       <div className="mt-3 flex items-center gap-2 text-[10px] text-ink-faint">
         <span>Less</span>
@@ -1301,7 +1304,7 @@ function WakatimeBody({ stats, activity, period, accent }) {
 }
 
 function GFGBody({ stats, activity, period, accent }) {
-  const command = buildGFGCommand(stats, activity);
+  const command = buildGFGCommand(stats, activity, period);
   return (
     <div className="space-y-4">
       {/* ROW 1: Metrics */}
@@ -1334,13 +1337,19 @@ function GFGBody({ stats, activity, period, accent }) {
   );
 }
 
-function buildGFGCommand(stats, activity) {
+function buildGFGCommand(stats, activity, period = "90d") {
   const solved = stats.solvedDetails || {};
   const easy = Number(solved.easy || solved.Easy || 0);
   const medium = Number(solved.medium || solved.Medium || 0);
   const hard = Number(solved.hard || solved.Hard || 0);
   const totalSolved = stats.problemsSolved || 0;
-  const activityRows = normalizeGfgActivityRows(stats.activityCalendar);
+  const allActivityRows = normalizeGfgActivityRows(stats.activityCalendar);
+
+  // Filter activityCalendar to only dates within the selected period.
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - periodToDays(period));
+  const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+  const activityRows = allActivityRows.filter((r) => (r.date || "") >= cutoffStr);
 
   // Guard against a scraped activityCalendar that is actually a cumulative
   // count misattributed to a single day (e.g. all 9 "ever-solved" problems
@@ -1357,7 +1366,13 @@ function buildGFGCommand(stats, activity) {
   const bestDay = rows.reduce((best, row) => (!best || row.count > best.count ? row : best), null);
   const streaks = activityRows.length ? streakStats(rows) : { current: activity.streakCurrent, longest: activity.streakLongest };
 
-  const recent30 = rows.slice(-30).reduce((sum, row) => sum + Number(row.count || 0), 0);
+  // recent30: sum of the last 30 days relative to today (independent of period window)
+  const thirtyDaysCutoff = new Date();
+  thirtyDaysCutoff.setDate(thirtyDaysCutoff.getDate() - 30);
+  const thirtyDaysCutoffStr = thirtyDaysCutoff.toISOString().slice(0, 10);
+  const recent30 = allActivityRows
+    .filter((r) => (r.date || "") >= thirtyDaysCutoffStr)
+    .reduce((sum, row) => sum + Number(row.count || 0), 0);
   const spark = weekly.map(w => w.count);
 
   return {
@@ -1927,61 +1942,87 @@ function GFGPotdChecklistItem({ item, isPrimary }) {
   );
 }
 
+// Cell + gap sizes keyed by period so the grid fills space comfortably
+const GFG_CELL = { "7d": 26, "30d": 18, "90d": 13, "1y": 11 };
+const GFG_GAP  = { "7d":  6, "30d":  4, "90d":  3, "1y":  2 };
+
 function GFGHeatmapPanel({ command, accent, period }) {
-  if (!command.rows.length || command.total <= 0) {
-    return (
-      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
-        <h3 className="font-display font-bold text-base mb-2">Coding Activity Heatmap</h3>
-        <EmptyState icon="📅" title="No activity" description="Refresh after your next solve." />
-      </div>
-    );
-  }
-  const { weeks, p95 } = heatmapWeeks(command.rows);
-  const cell = 14;
-  const gap = 4;
+  const days = periodToDays(period);
+  const { weeks, p95 } = heatmapWeeks(command.rows, days);
+  const hasActivity = command.total > 0;
+
+  const cell = GFG_CELL[period] ?? 13;
+  const gap  = GFG_GAP[period]  ?? 3;
   const step = cell + gap;
-  const width = Math.max(weeks.length * step + 36, 360);
+  const LEFT = 30;
+
+  // Month labels — show the abbreviated month name above the first week of each month
+  const monthLabels = [];
+  let lastMonth = null;
+  weeks.forEach((week, wi) => {
+    const firstReal = week.find(Boolean);
+    if (!firstReal) return;
+    const m = firstReal.date.slice(5, 7);
+    if (m !== lastMonth) {
+      lastMonth = m;
+      const label = new Date(`${firstReal.date}T00:00:00Z`).toLocaleString("default", { month: "short" });
+      monthLabels.push({ wi, label });
+    }
+  });
+  const topOffset = monthLabels.length > 1 ? 20 : 6;
+  const svgW = Math.max(weeks.length * step + LEFT, 120);
+  const svgH = topOffset + 7 * step + 4;
+
   const compactRange = period !== "1y";
   const recentWeeks = command.weekly.slice(-6).map((week) => ({
     ...week,
     weekRange: weekRangeLabel(week.date),
   }));
   const maxWeek = Math.max(...recentWeeks.map((week) => Number(week.count || 0)), 1);
+
   return (
     <div className="panel-pad !bg-[#070a16]/90 border border-white/5 overflow-hidden">
       <div className="mb-4 flex items-start justify-between gap-2">
         <div>
           <h3 className="font-display font-bold text-base">Coding Activity Heatmap</h3>
-          <p className="text-[10px] text-ink-faint mt-1">{command.totalDisplay} across {PERIOD_COPY[period] || "selected range"}</p>
+          <p className="text-[10px] text-ink-faint mt-1">
+            {hasActivity ? `${command.totalDisplay} across ` : ""}{PERIOD_COPY[period] || "selected range"}
+          </p>
         </div>
         <div className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-right">
           <div className="text-lg font-bold text-white">{command.activityRate}%</div>
           <div className="text-[9px] uppercase tracking-[0.14em] text-ink-faint">hit rate</div>
         </div>
       </div>
+
       <div className={`rounded-2xl border border-white/5 bg-black/10 p-4 ${compactRange ? "grid lg:grid-cols-[auto_1fr] gap-5 items-center" : "overflow-x-auto"}`}>
         <div className="overflow-x-auto">
-          <svg width={width} height={150} className="block">
-            {["Mon", "Wed", "Fri", "Sun"].map((day, i) => (
-              <text key={day} x="0" y={28 + i * 28} fill="rgba(148,163,184,0.65)" fontSize="10">{day}</text>
+          <svg width={svgW} height={svgH} className="block">
+            {/* Month labels */}
+            {monthLabels.length > 1 && monthLabels.map(({ wi, label }) => (
+              <text key={`m-${label}-${wi}`} x={LEFT + wi * step} y={12} fill="rgba(148,163,184,0.6)" fontSize="9">{label}</text>
             ))}
-            <g transform="translate(34,8)">
+            {/* Day-of-week labels */}
+            {["Mon", "Wed", "Fri", "Sun"].map((day, i) => (
+              <text key={day} x={0} y={topOffset + (i === 3 ? 6 * step : i * 2 * step) + cell - 1} fill="rgba(148,163,184,0.55)" fontSize="9">{day}</text>
+            ))}
+            <g transform={`translate(${LEFT},${topOffset})`}>
               {weeks.map((week, wi) =>
                 week.map((day, di) => {
                   if (!day) return null;
                   const level = bucket(day.count, p95);
                   return (
                     <rect
-                      key={`${day.date}-${wi}-${di}`}
+                      key={`${wi}-${di}`}
                       x={wi * step}
                       y={di * step}
                       width={cell}
                       height={cell}
-                      rx={4}
-                      fill={activityColor(accent, level)}
-                      stroke={level > 0 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"}
+                      rx={Math.max(2, Math.round(cell * 0.28))}
+                      fill={level > 0 ? activityColor(accent, level) : "rgba(255,255,255,0.05)"}
+                      stroke={level > 0 ? "rgba(255,255,255,0.08)" : "transparent"}
                     >
-                      <title>{`${day.date}: ${day.count} activity`}</title>
+                      <title>{`${day.date}: ${day.count} problem${day.count !== 1 ? "s" : ""}`}</title>
                     </rect>
                   );
                 })
@@ -1989,6 +2030,7 @@ function GFGHeatmapPanel({ command, accent, period }) {
             </g>
           </svg>
         </div>
+
         {compactRange && (
           <div className="hidden lg:block min-w-0">
             <div className="mb-3 flex items-center justify-between">
@@ -2018,8 +2060,9 @@ function GFGHeatmapPanel({ command, accent, period }) {
           </div>
         )}
       </div>
+
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <MiniPanel label="Best day" value={command.bestDayDisplay} sub={command.bestDay?.date} accent={accent} />
+        <MiniPanel label="Best day" value={hasActivity ? command.bestDayDisplay : "—"} sub={command.bestDay?.date} accent={accent} />
         <MiniPanel label="Active days" value={command.activeDays} accent="#22c55e" />
         <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
           <div className="text-[10px] text-ink-faint mb-2">Intensity</div>
@@ -2713,20 +2756,53 @@ function weeklyBuckets(rows) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function heatmapWeeks(rows) {
-  const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
-  const positives = sorted.map((row) => row.count).filter((count) => count > 0).sort((a, b) => a - b);
-  const p95 = positives.length ? positives[Math.floor(positives.length * 0.95)] || positives.at(-1) : 1;
+/**
+ * Build a week-grid for a heatmap.
+ *
+ * When `days` is supplied the grid covers exactly that many calendar days
+ * ending today, with empty days (count 0) filled in between active entries.
+ * When `days` is omitted the grid spans only the dates present in `rows`
+ * (legacy behaviour used by GitHub, whose rows already contain every day).
+ */
+function heatmapWeeks(rows, days) {
+  // Build lookup date → count from the provided rows
+  const lookup = {};
+  for (const row of rows) {
+    if (row?.date) lookup[row.date] = (lookup[row.date] || 0) + Number(row.count || 0);
+  }
+
+  let allDates;
+  if (days != null) {
+    // Generate every date in [today - days + 1 … today]
+    const today = new Date();
+    allDates = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      allDates.push(d.toISOString().slice(0, 10));
+    }
+  } else {
+    // Legacy: only dates that appear in rows
+    allDates = [...rows]
+      .filter((r) => r?.date)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((r) => r.date);
+  }
+
+  if (!allDates.length) return { weeks: [], p95: 1 };
+
+  const fullRows = allDates.map((date) => ({ date, count: lookup[date] || 0 }));
+  const positives = fullRows.map((r) => r.count).filter((c) => c > 0).sort((a, b) => a - b);
+  const p95 = positives.length ? (positives[Math.floor(positives.length * 0.95)] || positives.at(-1)) : 1;
+
+  // Build 7-row week columns, padding the start to align with the correct weekday
   const weeks = [];
   let week = [];
-  const firstDay = new Date(`${sorted[0]?.date}T00:00:00Z`).getUTCDay();
-  for (let i = 0; i < firstDay; i += 1) week.push(null);
-  for (const row of sorted) {
+  const firstDay = new Date(`${allDates[0]}T00:00:00Z`).getUTCDay();
+  for (let i = 0; i < firstDay; i++) week.push(null);
+  for (const row of fullRows) {
     week.push(row);
-    if (week.length === 7) {
-      weeks.push(week);
-      week = [];
-    }
+    if (week.length === 7) { weeks.push(week); week = []; }
   }
   if (week.length) {
     while (week.length < 7) week.push(null);
