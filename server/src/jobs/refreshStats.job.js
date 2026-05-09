@@ -43,6 +43,97 @@ function normalizeBeforeSave(platform, data) {
   return data;
 }
 
+function normalizeTitle(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function difficultyCount(raw, difficulty) {
+  const details = raw?.solvedDetails || {};
+  return Number(details[difficulty] || details[difficulty.toUpperCase()] || 0);
+}
+
+function deriveGfgRecentSolves(previous, current) {
+  const currentLists = current?.solvedProblems || {};
+  const previousLists = previous?.solvedProblems || {};
+  const derived = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const difficulty of ["school", "basic", "easy", "medium", "hard"]) {
+    const currentProblems = currentLists[difficulty] || [];
+    if (!currentProblems.length) continue;
+
+    const previousTitles = new Set(
+      (previousLists[difficulty] || []).map((problem) => normalizeTitle(problem.title))
+    );
+    const countDelta = Math.max(
+      0,
+      difficultyCount(current, difficulty) - difficultyCount(previous, difficulty)
+    );
+
+    const newProblems = currentProblems.filter((problem) => {
+      const title = normalizeTitle(problem.title);
+      return title && !previousTitles.has(title);
+    });
+    const selected = newProblems.length
+      ? newProblems
+      : countDelta > 0
+        ? currentProblems.slice(0, countDelta)
+        : [];
+
+    for (const problem of selected.slice(0, Math.max(countDelta, selected.length))) {
+      derived.push({
+        type: "solved",
+        title: problem.title,
+        difficulty,
+        date: today,
+        url: problem.url,
+        source: "gfg-breakdown-diff",
+      });
+    }
+  }
+
+  return derived;
+}
+
+function fallbackGfgSolvedActivity(current) {
+  const out = [];
+  const today = new Date().toISOString().slice(0, 10);
+  const lists = current?.solvedProblems || {};
+  for (const difficulty of ["hard", "medium", "easy", "basic", "school"]) {
+    for (const problem of lists[difficulty] || []) {
+      out.push({
+        type: "solved",
+        title: problem.title,
+        difficulty,
+        date: today,
+        url: problem.url,
+        source: "gfg-breakdown-current",
+      });
+      if (out.length >= 10) return out;
+    }
+  }
+  return out;
+}
+
+async function enrichGfgBeforeSave(userId, data) {
+  const previous = await statsModel.getLatestForPlatform(userId, "gfg");
+  const derived = deriveGfgRecentSolves(previous, data);
+  const fallback = !data.recentActivity?.length ? fallbackGfgSolvedActivity(data) : [];
+  if (!derived.length && !fallback.length) return data;
+
+  const seen = new Set();
+  const recentActivity = [...derived, ...fallback, ...(data.recentActivity || [])]
+    .filter((item) => {
+      const key = `${item.type || "activity"}:${normalizeTitle(item.title)}:${item.date || ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+
+  return { ...data, recentActivity };
+}
+
 async function refreshUser(userId) {
   const platforms = await platformModel.listForUser(userId);
   const results = [];
@@ -54,7 +145,11 @@ async function refreshUser(userId) {
     const full = await platformModel.findOne(userId, p.platform_name);
     try {
       const t0 = Date.now();
-      const data = normalizeBeforeSave(p.platform_name, await fetcher(full));
+      let fetched = await fetcher(full);
+      if (p.platform_name === "gfg") {
+        fetched = await enrichGfgBeforeSave(userId, fetched);
+      }
+      const data = normalizeBeforeSave(p.platform_name, fetched);
       await statsModel.saveSnapshot({
         userId,
         platform: p.platform_name,

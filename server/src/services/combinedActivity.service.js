@@ -95,6 +95,16 @@ function gfgExtractor(raw) {
   return { total: Number(raw?.problemsSolved || 0) };
 }
 
+function bucketGfgCalendar(stats) {
+  const days = stats?.gfg?.activityCalendar || [];
+  const m = {};
+  for (const d of days) {
+    if (!d?.date) continue;
+    m[d.date] = (m[d.date] || 0) + Number(d.count || 0);
+  }
+  return m;
+}
+
 function codechefExtractor(raw) {
   return { total: Number(raw?.problemsSolved || 0) };
 }
@@ -109,7 +119,10 @@ function hasTrustedCumulativeMetric(platform, raw) {
       Number(raw?.score || 0) > 0 ||
       Number(raw?.streak || 0) > 0 ||
       Number(raw?.maxStreak || 0) > 0 ||
-      Number(raw?.monthlyScore || 0) > 0
+      Number(raw?.monthlyScore || 0) > 0 ||
+      Number(raw?.articlesPublished || 0) > 0 ||
+      Number(raw?.potdSolved || 0) > 0 ||
+      (Array.isArray(raw?.activityCalendar) && raw.activityCalendar.length > 0)
     );
   }
 
@@ -244,9 +257,10 @@ async function buildHeatmap(userId, days = 365) {
   const stats = await statsModel.getLatestForUser(userId);
   const dates = windowDates(days);
   const totals = emptyMap(dates);
+  const gfgCalendar = bucketGfgCalendar(stats);
 
   const [gfgBucket, codechefBucket] = await Promise.all([
-    bucketGfgFromHistory(userId),
+    Object.keys(gfgCalendar).length ? gfgCalendar : bucketGfgFromHistory(userId),
     bucketCodechefFromHistory(userId),
   ]);
 
@@ -366,6 +380,7 @@ async function buildProblemsSeries(userId, days = 90) {
   for (const d of stats?.atcoder?.dailySubmissions || []) {
     if (d?.date) atcoderCalendar[d.date] = Number(d.count || 0);
   }
+  const gfgCalendar = bucketGfgCalendar(stats);
 
   /* ── merge: deltas take priority, calendar fills gaps ── */
   const daily = dates.map((date) => {
@@ -392,7 +407,9 @@ async function buildProblemsSeries(userId, days = 90) {
     const acTotal = atcoderDeltas[date]
       ? Number(atcoderDeltas[date].total || 0)
       : Number(atcoderCalendar[date] || 0);
-    const gfgTotal = Number(gfgDeltas[date]?.total || 0);
+    const gfgTotal = gfgDeltas[date]
+      ? Number(gfgDeltas[date].total || 0)
+      : Number(gfgCalendar[date] || 0);
     const codechefTotal = Number(codechefDeltas[date]?.total || 0);
 
     const unknown = lcUnknown + cfTotal + acTotal + gfgTotal + codechefTotal;

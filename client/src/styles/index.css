@@ -37,17 +37,8 @@ body::before {
 
 @layer components {
   .panel {
-    @apply bg-bg-card/90 backdrop-blur-xl rounded-xl border border-white/[0.06]
+    @apply bg-bg-card rounded-xl border border-white/[0.06]
            shadow-deep relative overflow-hidden;
-  }
-  .panel::before {
-    content: "";
-    @apply absolute inset-0 pointer-events-none rounded-xl;
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.025) 0%,
-      transparent 35%
-    );
   }
   .panel-pad { @apply panel p-4; }
 
@@ -130,23 +121,6 @@ body::before {
   .holo-border {
     position: relative;
   }
-  .holo-border::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg,
-      rgba(139, 92, 246, 0.5),
-      rgba(34, 211, 238, 0.4) 50%,
-      rgba(139, 92, 246, 0.5));
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-            mask-composite: exclude;
-    pointer-events: none;
-  }
 
   /* Stat number style */
   .stat-num {
@@ -163,37 +137,7 @@ body::before {
   .text-shadow-soft { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
 }
 
-/* Holographic shimmer on hover for any .panel (skipped on .holo-border which
-   already owns the ::after pseudo for its border ring). */
 .panel { position: relative; }
-.panel:not(.holo-border)::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background: linear-gradient(
-    115deg,
-    transparent 0%,
-    transparent 40%,
-    rgba(167, 139, 250, 0.10) 50%,
-    rgba(34, 211, 238, 0.08) 60%,
-    transparent 70%,
-    transparent 100%
-  );
-  background-size: 220% 100%;
-  background-position: 200% 0;
-  opacity: 0;
-  transition: opacity 220ms ease;
-}
-.panel:not(.holo-border):hover::after {
-  opacity: 1;
-  animation: holo-sweep 1.6s ease-out;
-}
-@keyframes holo-sweep {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -100% 0; }
-}
 
 /* Slow infinite spin used by DevScore inner ring */
 @keyframes spin-slow {

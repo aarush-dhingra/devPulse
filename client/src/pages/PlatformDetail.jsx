@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   XAxis,
@@ -514,7 +514,7 @@ function LeetCodeBody({ stats, activity, period, accent }) {
         <LeetCodeMetricCard label="Global Rank" value={command.globalRank !== "—" ? `#${command.globalRank.toLocaleString()}` : "—"} color="#22c55e" trend={command.recent30 > 0 ? `${command.recent30} this month` : null} />
         <LeetCodeMetricCard label="Problems Solved" value={command.total} color="#38bdf8" trend={command.recent30 > 0 ? `${command.recent30} this month` : null} />
         <LeetCodeMetricCard label="Reputation" value={command.reputation} color="#f59e0b" sub="Community" />
-        <LeetCodeBadgeCard count={command.badgesCount} />
+        <LeetCodeBadgeCard count={command.badgesCount} badges={command.badges} />
       </div>
 
       {/* ROW 2: Donut, Trend, Small Cards */}
@@ -527,26 +527,17 @@ function LeetCodeBody({ stats, activity, period, accent }) {
         </div>
       </div>
 
-      {/* ROW 3: Heatmap, Difficulty Percentages, Problem Tags (Empty) */}
+      {/* ROW 3: Heatmap, Solve Progress, Problem Tags */}
       <div className="grid xl:grid-cols-[2fr_1fr_1fr] gap-3 items-stretch">
         <LeetCodeHeatmapPanel command={command} accent={accent} period={period} />
-        <LeetCodeDifficultyBreakdown command={command} />
-        <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
-          <h3 className="font-display font-bold text-base mb-2">Top Problem Tags</h3>
-          <EmptyState icon="🏷️" title="No tag data" description="LeetCode tags are not currently synced." />
-        </div>
+        <LeetCodeLanguageStats command={command} />
+        <LeetCodeTopTags command={command} />
       </div>
 
-      {/* ROW 4: Recent Solves (Empty), Contests (Empty), Radar, Streak */}
+      {/* ROW 4: Recent Solves, Contest Performance, Radar, Streak */}
       <div className="grid xl:grid-cols-[1fr_1fr_1fr_1fr] gap-3 items-stretch">
-        <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
-          <h3 className="font-display font-bold text-base mb-2">Recent Solves</h3>
-          <EmptyState icon="✅" title="No recent solves" description="Detailed submission history not available." />
-        </div>
-        <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
-          <h3 className="font-display font-bold text-base mb-2">Contest Performance</h3>
-          <EmptyState icon="🏆" title="No contest data" description="Detailed contest history not available." />
-        </div>
+        <LeetCodeRecentSolves command={command} />
+        <LeetCodeContestPerformance command={command} />
         <LeetCodeRhythmPanel command={command} accent={accent} />
         <LeetCodeStreakJourney command={command} accent={accent} />
       </div>
@@ -565,6 +556,15 @@ function buildLeetCodeCommand(stats, activity) {
   const weekday = buildWeekdayTotals(activity.rows);
   const spark = activity.weekly.map(w => w.count);
 
+  const rawRating = stats.contest?.rating;
+  const contestRating = rawRating ? Math.round(rawRating) : "—";
+
+  const allTags = [
+    ...(stats.skillStats?.fundamental  || []),
+    ...(stats.skillStats?.intermediate || []),
+    ...(stats.skillStats?.advanced     || []),
+  ].sort((a, b) => b.problemsSolved - a.problemsSolved).slice(0, 10);
+
   return {
     ...activity,
     easy,
@@ -574,14 +574,22 @@ function buildLeetCodeCommand(stats, activity) {
     recent30,
     globalRank: stats.profile?.ranking || "—",
     reputation: stats.profile?.reputation || 0,
-    contestRating: stats.contest?.rating || "—",
+    contestRating,
     contestTopPct: stats.contest?.topPercentage || "—",
     acceptanceRate: stats.acceptanceRate || 0,
+    badges: stats.badges || [],
     badgesCount: stats.badges?.length || 0,
     weekday,
     spark,
     streakLongest: activity.streakLongest || 0,
     streakCurrent: activity.streakCurrent || 0,
+    recentSolves: stats.recentSolves || [],
+    topTags: allTags,
+    contestHistory: stats.contestHistory || [],
+    totalEasy: stats.totalEasy || 0,
+    totalMedium: stats.totalMedium || 0,
+    totalHard: stats.totalHard || 0,
+    languageStats: stats.languageStats || [],
   };
 }
 
@@ -607,16 +615,27 @@ function LeetCodeMetricCard({ label, value, sub, trend, color, spark }) {
   );
 }
 
-function LeetCodeBadgeCard({ count }) {
+function LeetCodeBadgeCard({ count, badges = [] }) {
+  const iconUrl = (icon) =>
+    icon?.startsWith("http") ? icon : `https://leetcode.com${icon}`;
   return (
-    <div className="rounded-2xl border border-white/5 bg-[#080b18] px-4 py-4 flex flex-col items-center justify-center text-center min-h-[110px]">
-      <div className="w-12 h-12 mb-2 relative flex items-center justify-center">
-        <svg viewBox="0 0 24 24" className="absolute inset-0 w-full h-full text-violet-500/20" fill="currentColor">
-          <polygon points="12,2 22,8 22,16 12,22 2,16 2,8" stroke="#8b5cf6" strokeWidth="1.5" />
-        </svg>
-        <span className="relative text-lg font-bold text-violet-300">{count}</span>
+    <div className="rounded-2xl border border-white/5 bg-[#080b18] px-4 py-3 flex flex-col min-h-[110px]">
+      <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted mb-2">Badges Earned</div>
+      <div className="flex-1 flex flex-wrap gap-1.5 items-start content-start overflow-y-auto" style={{ maxHeight: 56 }}>
+        {badges.length > 0
+          ? badges.map((b) => (
+              <img
+                key={b.id}
+                src={iconUrl(b.icon)}
+                title={b.displayName}
+                alt={b.displayName}
+                className="w-8 h-8 object-contain"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+            ))
+          : <span className="text-ink-faint text-xs">No badges yet</span>}
       </div>
-      <div className="text-[10px] text-ink-muted">{count} Badges Earned</div>
+      <div className="text-[10px] text-ink-faint mt-1">{count} Badges</div>
     </div>
   );
 }
@@ -685,16 +704,31 @@ function LeetCodeTrendChart({ command, accent, period }) {
 }
 
 function LeetCodeConsistencyCard({ command }) {
+  // Each dot = one of the last 30 days; green = had activity, grey = none
+  const last30 = command.rows.slice(-30);
+  const activeLast30 = last30.filter((r) => r.count > 0).length;
+  // Pad from the front if fewer than 30 rows available
+  const dots = [
+    ...Array(Math.max(0, 30 - last30.length)).fill(false),
+    ...last30.map((r) => r.count > 0),
+  ];
   return (
     <div className="rounded-2xl flex-1 border border-white/5 bg-[#080b18] px-4 py-4 flex flex-col">
       <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted mb-2">Consistency</div>
       <div className="flex items-end gap-2 mb-3">
-        <div className="text-3xl font-display font-bold tabular-nums text-white">{command.activeDays}</div>
-        <div className="text-[10px] text-ink-faint pb-1">Active Days</div>
+        <div className="text-3xl font-display font-bold tabular-nums text-white">{activeLast30}</div>
+        <div className="text-[10px] text-ink-faint pb-1">Active Days (30d)</div>
       </div>
       <div className="grid grid-cols-[repeat(15,minmax(0,1fr))] gap-1 mt-auto">
-        {Array.from({ length: 30 }).map((_, i) => (
-          <div key={i} className="aspect-square rounded-full" style={{ background: i < Math.round((command.activityRate / 100) * 30) ? "#22c55e" : "rgba(255,255,255,0.06)" }} />
+        {dots.map((active, i) => (
+          <div
+            key={i}
+            className="aspect-square rounded-sm"
+            title={last30[i - Math.max(0, 30 - last30.length)]
+              ? `${last30[i - Math.max(0, 30 - last30.length)].date}: ${last30[i - Math.max(0, 30 - last30.length)].count} solves`
+              : "No data"}
+            style={{ background: active ? "#22c55e" : "rgba(255,255,255,0.06)" }}
+          />
         ))}
       </div>
     </div>
@@ -710,7 +744,26 @@ function LeetCodeHeatmapPanel({ command, accent, period }) {
       </div>
     );
   }
+  const LC_GREEN = "#22c55e";
   const { weeks, p95 } = heatmapWeeks(command.rows);
+  const svgW = weeks.length * 15 + 30;
+  const svgH = 118;
+  // Month label positions: track first week of each month for "1y" period
+  const monthLabels = [];
+  if (period === "1y") {
+    let lastMonth = null;
+    weeks.forEach((week, wi) => {
+      const firstDate = week.find(Boolean)?.date;
+      if (firstDate) {
+        const m = firstDate.slice(5, 7);
+        if (m !== lastMonth) {
+          lastMonth = m;
+          monthLabels.push({ wi, label: new Date(`${firstDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short" }) });
+        }
+      }
+    });
+  }
+  const topOffset = monthLabels.length ? 22 : 8;
   return (
     <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
       <div className="mb-4 flex items-center justify-between gap-2">
@@ -718,37 +771,44 @@ function LeetCodeHeatmapPanel({ command, accent, period }) {
         <span className="text-[10px] text-ink-faint">{PERIOD_COPY[period] || "range"}</span>
       </div>
       <div className="overflow-x-auto">
-        <svg width={Math.max(weeks.length * 15 + 30, 320)} height={118} className="block">
-          {["Mon", "Wed", "Fri"].map((day, i) => (
-            <text key={day} x="0" y={32 + i * 30} fill="rgba(148,163,184,0.65)" fontSize="10">{day}</text>
-          ))}
-          <g transform="translate(30,8)">
-            {weeks.map((week, wi) =>
-              week.map((day, di) => {
-                if (!day) return null;
-                return (
-                  <rect
-                    key={`${day.date}-${wi}-${di}`}
-                    x={wi * 15}
-                    y={di * 15}
-                    width={12}
-                    height={12}
-                    rx={2}
-                    fill={activityColor(accent, bucket(day.count, p95))}
-                  >
-                    <title>{`${day.date}: ${day.count} solves`}</title>
-                  </rect>
-                );
-              })
-            )}
-          </g>
-        </svg>
+        <div className="mx-auto" style={{ width: "fit-content" }}>
+          <svg width={svgW} height={monthLabels.length ? svgH + 14 : svgH} className="block">
+            {/* Month labels (1y only) */}
+            {monthLabels.map(({ wi, label }) => (
+              <text key={label + wi} x={30 + wi * 15} y={12} fill="rgba(148,163,184,0.55)" fontSize="9">{label}</text>
+            ))}
+            {/* Day-of-week labels */}
+            {["Mon", "Wed", "Fri"].map((day, i) => (
+              <text key={day} x="0" y={topOffset + 22 + i * 30} fill="rgba(148,163,184,0.65)" fontSize="10">{day}</text>
+            ))}
+            <g transform={`translate(30,${topOffset})`}>
+              {weeks.map((week, wi) =>
+                week.map((day, di) => {
+                  if (!day) return null;
+                  return (
+                    <rect
+                      key={`${day.date}-${wi}-${di}`}
+                      x={wi * 15}
+                      y={di * 15}
+                      width={12}
+                      height={12}
+                      rx={3}
+                      fill={activityColor(LC_GREEN, bucket(day.count, p95))}
+                    >
+                      <title>{`${day.date}: ${day.count} solves`}</title>
+                    </rect>
+                  );
+                })
+              )}
+            </g>
+          </svg>
+        </div>
       </div>
       <div className="mt-3 flex items-center gap-2 text-[10px] text-ink-faint">
         <span>Less</span>
         <div className="flex gap-1">
           {[0, 1, 2, 3, 4].map((level) => (
-            <span key={level} className="h-2 w-2 rounded-sm" style={{ background: activityColor(accent, level) }} />
+            <span key={level} className="h-2 w-2 rounded-sm" style={{ background: activityColor(LC_GREEN, level) }} />
           ))}
         </div>
         <span>More</span>
@@ -757,48 +817,62 @@ function LeetCodeHeatmapPanel({ command, accent, period }) {
   );
 }
 
-function LeetCodeDifficultyBreakdown({ command }) {
-  const data = [
-    { name: "Easy", value: command.easy, color: "#10b981" },
-    { name: "Medium", value: command.medium, color: "#f59e0b" },
-    { name: "Hard", value: command.hard, color: "#ef4444" },
-  ].filter(d => d.value > 0);
+const LANG_COLORS = {
+  Java:        "#f89820",
+  Python:      "#3572A5",
+  Python3:     "#3572A5",
+  "C++":       "#f34b7d",
+  C:           "#555555",
+  JavaScript:  "#f1e05a",
+  TypeScript:  "#3178c6",
+  Go:          "#00ADD8",
+  Rust:        "#dea584",
+  Kotlin:      "#A97BFF",
+  Swift:       "#F05138",
+  Ruby:        "#701516",
+  Scala:       "#c22d40",
+  MySQL:       "#e38c00",
+  "C#":        "#178600",
+  PHP:         "#4F5D95",
+  Dart:        "#00B4AB",
+};
+
+function LeetCodeLanguageStats({ command }) {
+  const langs = command.languageStats || [];
+  const maxSolved = langs[0]?.problemsSolved || 1;
 
   return (
     <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
-      <h3 className="font-display font-bold text-base mb-4">Difficulty Breakdown</h3>
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <div className="relative h-28 w-28 mx-auto">
-          <ResponsiveContainer>
-            <PieChart>
-              <Pie data={data} dataKey="value" innerRadius={35} outerRadius={50} paddingAngle={0} stroke="transparent">
-                {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Pie>
-              <Tooltip content={<ChartTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-            <div className="text-lg font-bold text-white">{command.total}</div>
-            <div className="text-[9px] text-ink-muted">Solved</div>
-          </div>
-        </div>
-        <div className="w-full space-y-2">
-          {data.map(d => {
-            const pct = command.total > 0 ? ((d.value / command.total) * 100).toFixed(1) : 0;
+      <h3 className="font-display font-bold text-base mb-4">Languages</h3>
+      {langs.length > 0 ? (
+        <div className="flex-1 flex flex-col justify-center gap-3.5">
+          {langs.slice(0, 6).map((lang) => {
+            const pct = (lang.problemsSolved / maxSolved) * 100;
+            const color = LANG_COLORS[lang.languageName] || "#a78bfa";
             return (
-              <div key={d.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-sm" style={{ background: d.color }} />
-                  <span className="text-ink-muted">{d.name}</span>
+              <div key={lang.languageName}>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                    <span className="font-medium text-ink-200">{lang.languageName}</span>
+                  </div>
+                  <span className="text-ink-faint tabular-nums">{lang.problemsSolved}</span>
                 </div>
-                <div className="text-white">
-                  <span className="text-ink-faint mr-2">{pct}% ({d.value})</span>
+                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, background: color }}
+                  />
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <EmptyState icon="💻" title="No language data" description="Refresh to load language stats." />
+        </div>
+      )}
     </div>
   );
 }
@@ -867,6 +941,114 @@ function LeetCodeStreakJourney({ command, accent }) {
     </div>
   );
 }
+
+function relativeTime(ts) {
+  const now = new Date();
+  const then = new Date(Number(ts) * 1000);
+  // Use calendar-day boundaries in the browser's local timezone (matches LeetCode)
+  const nowDay  = new Date(now.getFullYear(),  now.getMonth(),  now.getDate());
+  const thenDay = new Date(then.getFullYear(), then.getMonth(), then.getDate());
+  const diffDays = Math.round((nowDay - thenDay) / 86400000);
+  if (diffDays === 0) {
+    const diffMs = now - then;
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    return `${Math.floor(mins / 60)}h ago`;
+  }
+  if (diffDays < 7)  return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
+
+function LeetCodeTopTags({ command }) {
+  const tags = command.topTags || [];
+  const maxSolved = tags[0]?.problemsSolved || 1;
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-3">Top Problem Tags</h3>
+      {tags.length > 0 ? (
+        <div className="flex-1 flex flex-col justify-center space-y-2">
+          {tags.slice(0, 8).map((tag) => (
+            <div key={tag.tagSlug} className="flex items-center gap-2 text-xs">
+              <span className="w-20 truncate text-ink-muted shrink-0">{tag.tagName}</span>
+              <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-violet-400"
+                  style={{ width: `${(tag.problemsSolved / maxSolved) * 100}%` }}
+                />
+              </div>
+              <span className="w-7 text-right text-white tabular-nums shrink-0">{tag.problemsSolved}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon="🏷️" title="No tag data" description="Refresh to sync LeetCode tags." />
+      )}
+    </div>
+  );
+}
+
+function LeetCodeRecentSolves({ command }) {
+  const solves = command.recentSolves || [];
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-3">Recent Solves</h3>
+      {solves.length > 0 ? (
+        <div className="flex-1 flex flex-col justify-start space-y-2.5">
+          {solves.slice(0, 6).map((s, i) => (
+            <div key={i} className="flex flex-col gap-0.5">
+              <a
+                href={`https://leetcode.com/problems/${s.titleSlug}/`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-ink-200 hover:text-white transition truncate"
+              >
+                {s.title}
+              </a>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-ink-faint bg-white/5 px-1.5 py-0.5 rounded">
+                  {s.lang}
+                </span>
+                <span className="text-[10px] text-ink-faint/70">{relativeTime(s.timestamp)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon="✅" title="No recent solves" description="Refresh to load your latest accepted submissions." />
+      )}
+    </div>
+  );
+}
+
+function LeetCodeContestPerformance({ command }) {
+  const history = command.contestHistory || [];
+  const sorted = [...history].reverse();
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-3">Contest Performance</h3>
+      {sorted.length > 0 ? (
+        <div className="flex-1 flex flex-col justify-start space-y-3">
+          {sorted.slice(0, 4).map((c, i) => (
+            <div key={i} className="flex flex-col gap-0.5">
+              <span className="text-xs text-ink-200 truncate" title={c.title}>{c.title}</span>
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className={c.trend === "UP" ? "text-emerald-400" : "text-red-400"}>
+                  {c.trend === "UP" ? "↑" : "↓"} {Math.round(c.rating)}
+                </span>
+                <span className="text-ink-faint">Rank #{c.ranking?.toLocaleString?.() ?? c.ranking}</span>
+                <span className="text-ink-faint/70">{c.solved}/{c.total} solved</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon="🏆" title="No contest data" description="Refresh to load your contest history." />
+      )}
+    </div>
+  );
+}
+
 function CodeforcesBody({ stats, activity, period, accent }) {
   const history = (stats.ratingHistory || []).map((r) => ({
     name: r.contestName?.slice(0, 18),
@@ -934,33 +1116,729 @@ function WakatimeBody({ stats, activity, period, accent }) {
 }
 
 function GFGBody({ stats, activity, period, accent }) {
+  const command = buildGFGCommand(stats, activity);
   return (
-    <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Coding Score" value={stats.score ?? 0} icon="🧠" accent="#10b981" />
-        <StatCard label="Problems Solved" value={stats.problemsSolved ?? 0} icon="🎯" accent="#22d3ee" />
-        <StatCard label="Current Streak" value={`${stats.streak ?? 0}d`} format="raw" icon="🔥" accent="#f59e0b" />
-        <StatCard label="Max Streak" value={`${stats.maxStreak ?? 0}d`} format="raw" icon="🏔️" accent="#a855f7" />
+    <div className="space-y-4">
+      {/* ROW 1: Metrics */}
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+        <GFGMetricCard label="Coding Score" value={command.score} color="#10b981" spark={command.spark} trend={command.recent30 > 0 ? `${command.recent30} this month` : null} />
+        <GFGMetricCard label="Problems Solved" value={command.totalSolved} color="#22c55e" icon="🎯" trend={command.recent30 > 0 ? `${command.recent30} this month` : null} />
+        <GFGMetricCard label="Streak" value={`${command.streakCurrent} days`} color="#f59e0b" icon="🔥" sub="Keep it up!" />
+        <GFGMetricCard label="Institute Rank" value={command.instituteRank !== "—" ? `#${command.instituteRank}` : "—"} color="#a855f7" icon="🏫" />
+        <GFGMetricCard label="Articles Published" value={command.articlesPublished} color="#3b82f6" icon="📄" />
+        <GFGMetricCard label="POTD Solved" value={command.potdSolved} color="#ef4444" icon="📅" />
       </div>
-      <ActivityGrid activity={activity} period={period} accent={accent} />
-      <div className="grid lg:grid-cols-[1fr_1fr] gap-4">
-        <DifficultyBars title="Solved Breakdown" details={stats.solvedDetails || {}} accent={accent} />
-        <ProfilePanel
-          title="GFG Profile"
-          rows={[
-            ["Username", `@${stats.profile?.username || "—"}`],
-            ["Name", stats.profile?.name || "—"],
-            ["Institute", stats.profile?.institute || "—"],
-            ["Institute rank", stats.profile?.instituteRank?.toLocaleString?.() || stats.profile?.instituteRank || "—"],
-            ["Monthly score", stats.monthlyScore ?? 0],
-            ["Source", stats.source || "—"],
-          ]}
-        />
+
+      {/* ROW 2: Trend + Heatmap */}
+      <div className="grid xl:grid-cols-[1fr_1.55fr] gap-3 items-stretch">
+        <GFGTrendChart command={command} accent={accent} />
+        <GFGHeatmapPanel command={command} accent={accent} period={period} />
       </div>
-    </>
+
+      {/* ROW 3/4: compact cards with expanded performance summary */}
+      <div className="grid xl:grid-cols-3 gap-3 items-stretch">
+        <GFGDifficultyBreakdown command={command} />
+        <GFGStreakCalendar command={command} accent="#f59e0b" period={period} />
+        <div className="xl:row-span-2">
+          <GFGPerformanceSummary command={command} />
+        </div>
+        <GFGRecentActivity command={command} />
+        <GFGPotdHistory command={command} />
+      </div>
+    </div>
   );
 }
 
+function buildGFGCommand(stats, activity) {
+  const solved = stats.solvedDetails || {};
+  const easy = Number(solved.easy || solved.Easy || 0);
+  const medium = Number(solved.medium || solved.Medium || 0);
+  const hard = Number(solved.hard || solved.Hard || 0);
+  const totalSolved = stats.problemsSolved || 0;
+  const activityRows = normalizeGfgActivityRows(stats.activityCalendar);
+  const rows = activityRows.length ? activityRows : activity.rows;
+  const weekly = activityRows.length ? weeklyBuckets(rows).slice(-18) : activity.weekly;
+  const total = rows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const activeDays = rows.filter((row) => Number(row.count || 0) > 0).length;
+  const bestDay = rows.reduce((best, row) => (!best || row.count > best.count ? row : best), null);
+  const streaks = activityRows.length ? streakStats(rows) : { current: activity.streakCurrent, longest: activity.streakLongest };
+
+  const recent30 = rows.slice(-30).reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const spark = weekly.map(w => w.count);
+
+  return {
+    ...activity,
+    rows,
+    weekly,
+    total,
+    totalDisplay: formatActivity(total, activity.kind),
+    activeDays,
+    activityRate: rows.length ? Math.round((activeDays / rows.length) * 100) : 0,
+    bestDay,
+    bestDayDisplay: bestDay ? formatActivity(bestDay.count, activity.kind) : "—",
+    score: stats.score || 0,
+    totalSolved,
+    easy,
+    medium,
+    hard,
+    streakLongest: stats.maxStreak || streaks.longest || 0,
+    streakCurrent: stats.streak || streaks.current || 0,
+    instituteRank: stats.profile?.instituteRank?.toLocaleString?.() || stats.profile?.instituteRank || "—",
+    monthlyScore: stats.monthlyScore || 0,
+    recent30,
+    spark,
+    articlesPublished: stats.articlesPublished || 0,
+    potdSolved: stats.potdSolved || 0,
+    recentActivity: stats.recentActivity || [],
+    potdHistory: stats.potdHistory || [],
+    publicPotd: stats.publicPotd || stats.potdHistory?.[0] || {
+      title: "Open GeeksforGeeks Problem of the Day",
+      dateLabel: "Today",
+      status: "Open",
+      url: "https://www.geeksforgeeks.org/problem-of-the-day",
+    },
+    topicStats: stats.topicStats || [],
+    topicMastery: stats.topicMastery || [],
+    performance: buildGfgPerformance(rows, stats.solvedDetails || {}),
+  };
+}
+
+function normalizeGfgActivityRows(rows = []) {
+  return (rows || [])
+    .filter((row) => row?.date)
+    .map((row) => ({ date: row.date, count: Number(row.count || 0) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function difficultyWeight(label) {
+  const key = String(label || "").toLowerCase();
+  if (key.includes("hard")) return 3;
+  if (key.includes("medium")) return 2;
+  if (key.includes("easy")) return 1;
+  if (key.includes("basic")) return 0.5;
+  return 0.25;
+}
+
+function buildGfgPerformance(rows, solvedDetails) {
+  const thisWeek = rows.slice(-7).reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const lastWeek = rows.slice(-14, -7).reduce((sum, row) => sum + Number(row.count || 0), 0);
+  const growth = lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : (thisWeek > 0 ? 100 : 0);
+  const entries = Object.entries(solvedDetails || {})
+    .map(([difficulty, count]) => ({ difficulty, count: Number(count || 0), weight: difficultyWeight(difficulty) }))
+    .filter((item) => item.count > 0);
+  const total = entries.reduce((sum, item) => sum + item.count, 0);
+  const avgDifficulty = total
+    ? entries.reduce((sum, item) => sum + item.count * item.weight, 0) / total
+    : 0;
+  const mediumPlus = entries
+    .filter((item) => item.weight >= 2)
+    .reduce((sum, item) => sum + item.count, 0);
+  const hard = entries
+    .filter((item) => item.weight >= 3)
+    .reduce((sum, item) => sum + item.count, 0);
+  const solvesPerWeek = rows.length
+    ? Math.round((rows.reduce((sum, row) => sum + Number(row.count || 0), 0) / Math.max(1, rows.length)) * 7 * 10) / 10
+    : 0;
+  const projectedMonth = Math.round(solvesPerWeek * 4.3);
+  const nextTarget = avgDifficulty < 1.8
+    ? "Solve 2 Medium problems to improve quality mix"
+    : rows.slice(-7).filter((row) => Number(row.count || 0) > 0).length < 4
+      ? "Add 1 active day to reach 4/7 consistency"
+      : "Try one Hard problem while momentum is warm";
+  return {
+    thisWeek,
+    lastWeek,
+    growth,
+    avgDifficulty: Math.round(avgDifficulty * 10) / 10,
+    activeDays: rows.slice(-7).filter((row) => Number(row.count || 0) > 0).length,
+    mediumPlusShare: total ? Math.round((mediumPlus / total) * 100) : 0,
+    hardShare: total ? Math.round((hard / total) * 100) : 0,
+    solvesPerWeek,
+    projectedMonth,
+    nextTarget,
+  };
+}
+
+function weekRangeLabel(date) {
+  const start = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(start.getTime())) return date || "Week";
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  const fmt = (dt) => dt.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  return `${fmt(start)}-${fmt(end)}`;
+}
+
+function GFGMetricCard({ label, value, sub, trend, color, spark, icon }) {
+  return (
+    <div className="rounded-2xl border border-white/5 bg-[#080b18] px-4 py-4 relative flex flex-col justify-between min-h-[110px]">
+      <div>
+        <div className="flex items-start justify-between">
+          <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted mb-2">{label}</div>
+          {icon && (
+            <div className="w-6 h-6 rounded-md flex items-center justify-center text-xs" style={{ background: `${color}1A`, color: color }}>
+              {icon}
+            </div>
+          )}
+        </div>
+        <div className="text-3xl font-display font-bold tabular-nums text-white">{value}</div>
+      </div>
+      <div className="mt-3 flex items-end justify-between">
+        <div className="mb-0.5">
+          {trend && <div className="text-[10px] text-emerald-400 font-medium">↑ {trend}</div>}
+          {sub && !trend && <div className="text-[10px] text-ink-faint">{sub}</div>}
+        </div>
+        {spark?.length ? (
+          <div className="ml-auto w-16 h-6">
+            <Sparkline values={spark} color={color} width={64} height={24} showArea={false} strokeWidth={2} />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function GFGTrendChart({ command, accent }) {
+  const data = command.weekly.map((week) => ({
+    ...week,
+    weekRange: weekRangeLabel(week.date),
+  }));
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-display font-bold text-base">Problem Solving Trend</h3>
+        <span className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-ink-muted">Weekly</span>
+      </div>
+      <div className="h-52">
+        <ResponsiveContainer>
+          <LineChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis dataKey="weekRange" tick={{ fill: chartTheme.text, fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={24} />
+            <YAxis tick={{ fill: chartTheme.text, fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+            <Tooltip content={<ChartTooltip />} />
+            <Line type="monotone" dataKey="count" name="Activity" stroke={accent} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function GFGDifficultyBreakdown({ command }) {
+  const data = [
+    { name: "Easy", value: command.easy, color: "#10b981" },
+    { name: "Medium", value: command.medium, color: "#f59e0b" },
+    { name: "Hard", value: command.hard, color: "#ef4444" },
+  ].filter(d => d.value > 0);
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">Difficulty Breakdown</h3>
+      <div className="flex-1 flex items-center justify-center gap-6">
+        <div className="relative h-32 w-32">
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie data={data} dataKey="value" innerRadius={45} outerRadius={60} paddingAngle={0} stroke="transparent">
+                {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+              </Pie>
+              <Tooltip content={<ChartTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+            <div className="text-xl font-bold text-white">{command.totalSolved}</div>
+            <div className="text-[10px] text-ink-muted">Solved</div>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {data.map(d => {
+            const pct = command.totalSolved > 0 ? ((d.value / command.totalSolved) * 100).toFixed(1) : 0;
+            return (
+              <div key={d.name} className="flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-1.5 w-16">
+                  <span className="w-2 h-2 rounded-sm" style={{ background: d.color }} />
+                  <span className="text-ink-muted">{d.name}</span>
+                </div>
+                <div className="text-white">
+                  <span className="tabular-nums font-bold">{d.value}</span>
+                  <span className="text-ink-faint ml-2">({pct}%)</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GFGTopicsMastery({ command }) {
+  const data = (command.topicMastery?.length ? command.topicMastery : command.topicStats || [])
+    .slice(0, 5)
+    .map((topic, index) => ({
+      name: topic.name,
+      value: Number(topic.solved || topic.value || 0),
+      percent: Number(topic.percent || 0),
+      color: ["#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#94a3b8"][index] || "#22c55e",
+    }))
+    .filter((topic) => topic.value > 0);
+
+  if (!data.length) {
+    return (
+      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+        <h3 className="font-display font-bold text-base mb-2">Topics Mastery</h3>
+        <EmptyState icon="🧠" title="No topic data" description="GFG did not expose topic breakdown for this profile." />
+      </div>
+    );
+  }
+
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">Topics Mastery</h3>
+      <div className="flex-1 flex items-center justify-center gap-5">
+        <div className="relative h-32 w-32">
+          <ResponsiveContainer>
+            <PieChart>
+              <Pie data={data} dataKey="value" innerRadius={45} outerRadius={60} paddingAngle={3} stroke="transparent">
+                {data.map((d) => <Cell key={d.name} fill={d.color} />)}
+              </Pie>
+              <Tooltip content={<ChartTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+            <div className="text-lg font-bold text-white">{total}</div>
+            <div className="text-[10px] text-ink-muted">Topic Solves</div>
+          </div>
+        </div>
+        <div className="space-y-2 min-w-0">
+          {data.map((topic) => (
+            <div key={topic.name} className="flex items-center gap-2 text-xs">
+              <span className="w-2 h-2 rounded-sm" style={{ background: topic.color }} />
+              <span className="text-ink-muted truncate max-w-28">{topic.name}</span>
+              <span className="ml-auto text-white tabular-nums">{topic.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GFGMostSolvedTopics({ command }) {
+  const topics = (command.topicStats || []).slice(0, 6);
+  if (!topics.length) {
+    return (
+      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+        <h3 className="font-display font-bold text-base mb-2">Most Solved Topics</h3>
+        <EmptyState icon="📊" title="No topic data" description="Topic details were not available in the GFG payload." />
+      </div>
+    );
+  }
+
+  const max = Math.max(...topics.map((topic) => Number(topic.solved || 0)), 1);
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <h3 className="font-display font-bold text-base mb-4">Most Solved Topics</h3>
+      <div className="space-y-3">
+        {topics.map((topic) => {
+          const solved = Number(topic.solved || 0);
+          return (
+            <div key={topic.name}>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-ink-muted truncate">{topic.name}</span>
+                <span className="text-white tabular-nums">{solved}</span>
+              </div>
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(solved / max) * 100}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GFGStreakCalendar({ command, accent, period }) {
+  const recent = command.rows.slice(-14).map((row) => ({
+    ...row,
+    label: shortDateLabel(row.date),
+  }));
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 overflow-hidden h-full flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">Streak</h3>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">🔥</span>
+          <div>
+            <div className="text-[10px] text-ink-faint">Longest Streak</div>
+            <div className="font-bold text-white">{command.streakLongest} days</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] text-ink-faint">Current Streak</div>
+          <div className="font-bold text-white">{command.streakCurrent} days</div>
+        </div>
+      </div>
+      <div className="min-h-[190px] flex-1">
+        <ResponsiveContainer>
+          <AreaChart data={recent} margin={{ top: 6, right: 0, bottom: 0, left: -25 }}>
+            <defs>
+              <linearGradient id="gfg-streak-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={accent} stopOpacity="0.35" />
+                <stop offset="100%" stopColor={accent} stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: chartTheme.text, fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={18} />
+            <YAxis tick={{ fill: chartTheme.text, fontSize: 10 }} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
+            <Tooltip content={<ChartTooltip />} />
+            <Area type="monotone" dataKey="count" name="Activity" stroke={accent} strokeWidth={2} fill="url(#gfg-streak-area)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function GFGPerformanceSummary({ command }) {
+  const perf = command.performance;
+  const positive = perf.growth >= 0;
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex h-full flex-col">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="font-display font-bold text-base">Performance Summary</h3>
+          <p className="text-[10px] text-ink-faint mt-1">This week vs last week</p>
+        </div>
+        <span className={`rounded-full px-2 py-1 text-[10px] ${positive ? "bg-emerald-400/10 text-emerald-300" : "bg-red-400/10 text-red-300"}`}>
+          {positive ? "+" : ""}{perf.growth}%
+        </span>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <MiniPanel label="This week" value={perf.thisWeek} accent="#22c55e" />
+        <MiniPanel label="Last week" value={perf.lastWeek} accent="#64748b" />
+        <MiniPanel label="Avg difficulty" value={`${perf.avgDifficulty}/3`} accent="#a855f7" />
+        <MiniPanel label="Active days" value={`${perf.activeDays}/7`} accent="#f59e0b" />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-ink-faint">Quality Mix</div>
+          <div className="mt-2 flex items-end gap-2">
+            <span className="text-xl font-bold text-white">{perf.mediumPlusShare}%</span>
+            <span className="pb-1 text-[10px] text-ink-muted">Medium+</span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
+            <div className="h-full rounded-full bg-violet-500" style={{ width: `${perf.mediumPlusShare}%` }} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-ink-faint">Pace</div>
+          <div className="mt-2 flex items-end gap-2">
+            <span className="text-xl font-bold text-white">{perf.solvesPerWeek}</span>
+            <span className="pb-1 text-[10px] text-ink-muted">solves/week</span>
+          </div>
+          <div className="mt-2 text-[10px] text-ink-faint">~{perf.projectedMonth} projected monthly</div>
+        </div>
+      </div>
+      <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+          <span>Hard Share</span>
+          <span>{perf.hardShare}%</span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5">
+          <div className="h-full rounded-full bg-orange-500" style={{ width: `${perf.hardShare}%` }} />
+        </div>
+      </div>
+      <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-ink-muted">
+        <div className="mb-1 text-[10px] uppercase tracking-[0.14em] text-ink-faint">Next Target</div>
+        {perf.nextTarget}
+      </div>
+      <div className="mt-auto pt-4">
+        <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[0.03] p-3 text-[11px] text-ink-muted">
+          <span className="font-semibold text-emerald-300">Story:</span>{" "}
+          {perf.growth >= 50
+            ? "Your solve velocity is accelerating. Convert that pace into harder solves next."
+            : perf.activeDays >= 4
+              ? "Consistency is solid. The next gain is improving difficulty quality."
+              : "A few extra active days will make this week look much stronger."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GFGXPProgress({ command }) {
+  const level = Math.max(1, Math.floor((command.score || 0) / 100) + 1);
+  const currentXP = command.score || 0;
+  const nextLevelXP = level * 100;
+  const pct = Math.min(100, Math.max(0, (currentXP / nextLevelXP) * 100));
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">GFG XP Progress</h3>
+      <div className="flex-1 flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <div className="text-xl font-bold">Level {level}</div>
+          {command.monthlyScore > 0 && (
+            <div className="text-[10px] text-emerald-400 font-medium bg-emerald-400/10 px-2 py-1 rounded-full w-fit">
+              ↑ {command.monthlyScore} XP this month
+            </div>
+          )}
+        </div>
+        <div className="relative w-20 h-24 flex items-center justify-center">
+          <svg viewBox="0 0 100 115" className="absolute inset-0 w-full h-full text-emerald-500/20" fill="currentColor">
+            <polygon points="50,2 95,25 95,85 50,110 5,85 5,25" stroke="#10b981" strokeWidth="2" strokeDasharray="4 4" fill="none" />
+            <polygon points="50,12 85,32 85,78 50,98 15,78 15,32" fill="currentColor" />
+          </svg>
+          <span className="relative text-2xl font-bold text-white">{level}</span>
+        </div>
+      </div>
+      <div className="mt-4">
+        <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="text-[10px] text-ink-muted mt-2 text-right">
+          {currentXP} / {nextLevelXP} XP
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GFGRecentActivity({ command }) {
+  const items = (command.recentActivity || []).slice(0, 5);
+  if (!items.length) {
+    return (
+      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+        <h3 className="font-display font-bold text-base mb-2">Recent Activity</h3>
+        <EmptyState icon="📝" title="No recent activity" description="GFG did not expose recent activity for this profile." />
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <h3 className="font-display font-bold text-base mb-4">Recent Activity</h3>
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <a
+            key={`${item.title}-${item.date || index}`}
+            href={item.url || "#"}
+            target={item.url ? "_blank" : undefined}
+            rel={item.url ? "noreferrer" : undefined}
+            className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2"
+          >
+            <span className="mt-0.5 h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-semibold text-white">{item.title}</span>
+              <span className="mt-1 flex items-center gap-2 text-[10px] text-ink-faint">
+                <span className="capitalize">{item.type || "activity"}</span>
+                {item.difficulty && <span>{item.difficulty}</span>}
+                {item.date && <span>{item.date}</span>}
+              </span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GFGPotdHistory({ command }) {
+  const items = (command.potdHistory || []).slice(0, 4);
+  const current = command.publicPotd || items[0];
+  const list = [current, ...items.filter((item) => item.title !== current?.title)].filter(Boolean).slice(0, 4);
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-display font-bold text-base">Problem of the Day</h3>
+      </div>
+      {list.length ? (
+        <div className="space-y-2">
+          {list.map((item, index) => (
+            <GFGPotdChecklistItem key={`${item.title}-${item.date || item.dateLabel || index}`} item={item} isPrimary={index === 0} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-[10px] text-ink-faint">
+          Public POTD titles will fill in after the next backend refresh. The main card still links to GFG now.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GFGPotdChecklistItem({ item, isPrimary }) {
+  const storageKey = `gfg-potd-solved:${item.date || item.dateLabel}:${item.title}`;
+  const [markedSolved, setMarkedSolved] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(storageKey) === "1";
+  });
+
+  const toggleSolved = () => {
+    const next = !markedSolved;
+    setMarkedSolved(next);
+    if (typeof window !== "undefined") {
+      if (next) window.localStorage.setItem(storageKey, "1");
+      else window.localStorage.removeItem(storageKey);
+    }
+  };
+
+  return (
+    <div className={`rounded-2xl border p-4 transition ${
+      markedSolved
+        ? "border-emerald-400/30 bg-emerald-400/[0.06]"
+        : isPrimary
+          ? "border-white/15 bg-white/[0.025]"
+          : "border-white/5 bg-white/[0.02]"
+    }`}>
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={toggleSolved}
+          className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border transition ${
+            markedSolved
+              ? "border-emerald-400 bg-emerald-400 text-bg shadow-[0_0_18px_rgba(52,211,153,0.25)]"
+              : "border-white/15 bg-white/[0.03] text-transparent hover:border-emerald-400/60"
+          }`}
+          aria-label={markedSolved ? "Mark POTD unsolved" : "Mark POTD solved"}
+        >
+          <span className="text-sm font-black">✓</span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] font-semibold text-emerald-300">{item.dateLabel || item.date || "Today"}</div>
+            <a
+              href={item.url || "https://www.geeksforgeeks.org/problem-of-the-day"}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-ink-faint hover:text-emerald-300"
+            >
+              Open ↗
+            </a>
+          </div>
+          <a
+            href={item.url || "https://www.geeksforgeeks.org/problem-of-the-day"}
+            target="_blank"
+            rel="noreferrer"
+            className={`mt-1 block text-sm font-bold hover:text-emerald-300 ${markedSolved ? "text-white line-through decoration-emerald-400/70" : "text-white"}`}
+          >
+            {item.title}
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GFGHeatmapPanel({ command, accent, period }) {
+  if (!command.rows.length || command.total <= 0) {
+    return (
+      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+        <h3 className="font-display font-bold text-base mb-2">Coding Activity Heatmap</h3>
+        <EmptyState icon="📅" title="No activity" description="Refresh after your next solve." />
+      </div>
+    );
+  }
+  const { weeks, p95 } = heatmapWeeks(command.rows);
+  const cell = 14;
+  const gap = 4;
+  const step = cell + gap;
+  const width = Math.max(weeks.length * step + 36, 360);
+  const compactRange = period !== "1y";
+  const recentWeeks = command.weekly.slice(-6).map((week) => ({
+    ...week,
+    weekRange: weekRangeLabel(week.date),
+  }));
+  const maxWeek = Math.max(...recentWeeks.map((week) => Number(week.count || 0)), 1);
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 overflow-hidden">
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div>
+          <h3 className="font-display font-bold text-base">Coding Activity Heatmap</h3>
+          <p className="text-[10px] text-ink-faint mt-1">{command.totalDisplay} across {PERIOD_COPY[period] || "selected range"}</p>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-right">
+          <div className="text-lg font-bold text-white">{command.activityRate}%</div>
+          <div className="text-[9px] uppercase tracking-[0.14em] text-ink-faint">hit rate</div>
+        </div>
+      </div>
+      <div className={`rounded-2xl border border-white/5 bg-black/10 p-4 ${compactRange ? "grid lg:grid-cols-[auto_1fr] gap-5 items-center" : "overflow-x-auto"}`}>
+        <div className="overflow-x-auto">
+          <svg width={width} height={150} className="block">
+            {["Mon", "Wed", "Fri", "Sun"].map((day, i) => (
+              <text key={day} x="0" y={28 + i * 28} fill="rgba(148,163,184,0.65)" fontSize="10">{day}</text>
+            ))}
+            <g transform="translate(34,8)">
+              {weeks.map((week, wi) =>
+                week.map((day, di) => {
+                  if (!day) return null;
+                  const level = bucket(day.count, p95);
+                  return (
+                    <rect
+                      key={`${day.date}-${wi}-${di}`}
+                      x={wi * step}
+                      y={di * step}
+                      width={cell}
+                      height={cell}
+                      rx={4}
+                      fill={activityColor(accent, level)}
+                      stroke={level > 0 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"}
+                    >
+                      <title>{`${day.date}: ${day.count} activity`}</title>
+                    </rect>
+                  );
+                })
+              )}
+            </g>
+          </svg>
+        </div>
+        {compactRange && (
+          <div className="hidden lg:block min-w-0">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-white">Recent Pace</div>
+                <div className="text-[10px] text-ink-faint">weekly ranges</div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-bold text-emerald-400">{command.recent30}</div>
+                <div className="text-[9px] uppercase tracking-[0.14em] text-ink-faint">30d activity</div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {recentWeeks.map((week) => (
+                <div key={week.date} className="grid grid-cols-[86px_1fr_28px] items-center gap-2 text-[10px]">
+                  <span className="text-ink-faint">{week.weekRange}</span>
+                  <span className="h-2 overflow-hidden rounded-full bg-white/5">
+                    <span
+                      className="block h-full rounded-full bg-emerald-500"
+                      style={{ width: `${Math.max(6, (Number(week.count || 0) / maxWeek) * 100)}%` }}
+                    />
+                  </span>
+                  <span className="text-right text-white tabular-nums">{week.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <MiniPanel label="Best day" value={command.bestDayDisplay} sub={command.bestDay?.date} accent={accent} />
+        <MiniPanel label="Active days" value={command.activeDays} accent="#22c55e" />
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
+          <div className="text-[10px] text-ink-faint mb-2">Intensity</div>
+          <div className="flex items-center gap-1">
+            {[0, 1, 2, 3, 4].map((level) => (
+              <span key={level} className="h-3 w-3 rounded" style={{ background: activityColor(accent, level) }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function CodeChefBody({ stats, activity, period, accent }) {
   const history = (stats.contests || stats.ratingHistory || []).slice(-20).map((c, i) => ({
     name: c.contestName || c.name || `Contest ${i + 1}`,
@@ -1615,6 +2493,9 @@ function rawDailyRows(platform, stats) {
   }
   if (platform === "leetcode" || platform === "codeforces" || platform === "atcoder") {
     return stats.dailySubmissions || [];
+  }
+  if (platform === "gfg") {
+    return stats.activityCalendar || [];
   }
   return [];
 }
