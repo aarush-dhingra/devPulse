@@ -1,0 +1,17 @@
+fix GFG heatmap accuracy and platform disconnect cleanup
+
+- Fix GFG activity calendar showing all problems on a single day: the
+  snapshot-delta engine now only uses includeInitial when the first
+  snapshot pre-dates today, preventing first-connect spikes
+- Add direct POST call to practiceapi.geeksforgeeks.org submissions API
+  to derive activityCalendar from real user_subtime dates, replacing the
+  scrape-based approach that returned no data
+- Extract submissions from RSC streaming chunks as a fallback when
+  __NEXT_DATA__ is absent from the GFG auth practice page
+- Remove fallbackGfgSolvedActivity which stamped all solved problems
+  with today's date, producing garbage recentActivity entries
+- Fix parseActivityPage to exclude submissionsInfo/solvedStats from
+  activityRoots to prevent UI labels from polluting solvedProblems
+- Add pname to normalizeProblemEntry title keys for GFG submissions format
+- Add platform disconnect: delete snapshots and bust Redis cache on
+  disconnect, reset frontend statsStore so dashboard clears immediately

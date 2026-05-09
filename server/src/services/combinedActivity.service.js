@@ -198,7 +198,16 @@ async function bucketGfgFromHistory(userId) {
     await statsModel.getHistory(userId, "gfg", 60)
   );
   if (!history || history.length < 1) return {};
-  const deltas = snapshotDeltas(history, gfgExtractor, { includeInitial: true });
+
+  // Only attribute the initial snapshot count when we have a genuine
+  // historical baseline — i.e., the first snapshot is older than today.
+  // When all snapshots are from the same day (user just connected GFG),
+  // includeInitial would wrongly attribute ALL historical problems to today.
+  const today = dateKey(new Date());
+  const firstDay = dateKey(new Date(history[0].created_at));
+  const includeInitial = firstDay < today;
+
+  const deltas = snapshotDeltas(history, gfgExtractor, { includeInitial });
   const m = {};
   for (const [day, d] of Object.entries(deltas)) {
     if (d.total > 0) m[day] = d.total;
@@ -364,7 +373,11 @@ async function buildProblemsSeries(userId, days = 90) {
 
   const lcDeltas       = snapshotDeltas(history.leetcode   || [], lcExtractor);
   const cfDeltas       = snapshotDeltas(history.codeforces || [], cfExtractor);
-  const gfgDeltas      = snapshotDeltas(history.gfg        || [], gfgExtractor, { includeInitial: true });
+  const today2 = dateKey(new Date());
+  const gfgFirst = history.gfg?.[0];
+  const gfgFirstDay = gfgFirst ? dateKey(new Date(gfgFirst.created_at)) : today2;
+  const gfgIncludeInitial = gfgFirstDay < today2;
+  const gfgDeltas      = snapshotDeltas(history.gfg        || [], gfgExtractor, { includeInitial: gfgIncludeInitial });
   const codechefDeltas = snapshotDeltas(history.codechef   || [], codechefExtractor, { includeInitial: true });
   const atcoderDeltas  = snapshotDeltas(history.atcoder    || [], atcoderExtractor);
 

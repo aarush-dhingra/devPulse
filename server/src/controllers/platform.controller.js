@@ -2,7 +2,9 @@
 
 const platformModel = require("../models/platform.model");
 const statsModel = require("../models/stats.model");
+const userModel = require("../models/user.model");
 const { encrypt } = require("../utils/crypto");
+const { safeDel } = require("../config/redis");
 const { queueRefreshUser } = require("../jobs/queue");
 const { HttpError } = require("../middlewares/error.middleware");
 const { assertUsableSnapshot } = require("../services/platformQuality.service");
@@ -118,6 +120,17 @@ async function disconnectPlatform(req, res, next) {
     const { platform } = req.params;
     const ok = await platformModel.deletePlatform(req.user.id, platform);
     if (!ok) throw new HttpError(404, "Platform not connected");
+
+    // Delete all snapshots for this platform so the dashboard clears immediately.
+    await statsModel.deleteForPlatform(req.user.id, platform);
+
+    // Bust the cached stats payload so the next /stats/me reflects the removal.
+    const user = await userModel.findById(req.user.id);
+    if (user) {
+      await safeDel(`stats:user:${req.user.id}`).catch(() => {});
+      await safeDel(`stats:user:${user.username}`).catch(() => {});
+    }
+
     res.json({ ok: true });
   } catch (err) {
     next(err);

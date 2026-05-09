@@ -86,6 +86,14 @@ async function getMultiPlatformHistory(userId, platforms, limit = 60) {
   return grouped;
 }
 
+async function deleteForPlatform(userId, platform) {
+  const { rowCount } = await db.query(
+    `DELETE FROM stats_snapshots WHERE user_id = $1 AND platform = $2`,
+    [userId, platform]
+  );
+  return rowCount;
+}
+
 async function pruneOld({ keepPerPlatform = 30 } = {}) {
   // Keeps the latest N snapshots per (user, platform).
   await db.query(
@@ -110,5 +118,6 @@ module.exports = {
   getLatestForPlatform,
   getHistory,
   getMultiPlatformHistory,
+  deleteForPlatform,
   pruneOld,
 };

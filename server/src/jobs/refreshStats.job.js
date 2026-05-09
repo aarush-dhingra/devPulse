@@ -95,34 +95,16 @@ function deriveGfgRecentSolves(previous, current) {
   return derived;
 }
 
-function fallbackGfgSolvedActivity(current) {
-  const out = [];
-  const today = new Date().toISOString().slice(0, 10);
-  const lists = current?.solvedProblems || {};
-  for (const difficulty of ["hard", "medium", "easy", "basic", "school"]) {
-    for (const problem of lists[difficulty] || []) {
-      out.push({
-        type: "solved",
-        title: problem.title,
-        difficulty,
-        date: today,
-        url: problem.url,
-        source: "gfg-breakdown-current",
-      });
-      if (out.length >= 10) return out;
-    }
-  }
-  return out;
-}
-
 async function enrichGfgBeforeSave(userId, data) {
+  // Merge snapshot-delta derived activity with any activity already in the data.
+  // The fallback that used to stamp all solvedProblems with today's date has been
+  // removed — it produced garbage recentActivity with wrong dates.
   const previous = await statsModel.getLatestForPlatform(userId, "gfg");
   const derived = deriveGfgRecentSolves(previous, data);
-  const fallback = !data.recentActivity?.length ? fallbackGfgSolvedActivity(data) : [];
-  if (!derived.length && !fallback.length) return data;
+  if (!derived.length) return data;
 
   const seen = new Set();
-  const recentActivity = [...derived, ...fallback, ...(data.recentActivity || [])]
+  const recentActivity = [...derived, ...(data.recentActivity || [])]
     .filter((item) => {
       const key = `${item.type || "activity"}:${normalizeTitle(item.title)}:${item.date || ""}`;
       if (seen.has(key)) return false;

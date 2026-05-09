@@ -37,6 +37,18 @@ const fallback = createApiClient({
   name: "gfg-fallback",
 });
 
+const practiceApi = createApiClient({
+  baseURL: "https://practiceapi.geeksforgeeks.org",
+  name: "gfg-practice-api",
+  timeout: 18000,
+  headers: {
+    ...HTML_HEADERS,
+    Accept: "application/json, text/plain, */*",
+    Referer: "https://www.geeksforgeeks.org/",
+    Origin: "https://www.geeksforgeeks.org",
+  },
+});
+
 function shapePrimary(data, username) {
   const solvedStats = data?.solvedStats || {};
   return {
@@ -223,23 +235,43 @@ function normalizeDifficulty(value) {
   return key || "unknown";
 }
 
+// Known non-problem labels from GFG stats summary objects.
+const GFG_NON_PROBLEM_LABELS = new Set([
+  "coding score", "problems solved", "institute rank", "articles published",
+  "monthly score", "current streak", "max streak", "longest streak",
+  "potd solved", "school", "basic", "easy", "medium", "hard",
+  "total", "score", "rank", "streak",
+]);
+
+function isPlausibleProblemTitle(title) {
+  if (!title || typeof title !== "string") return false;
+  const t = title.trim();
+  if (t.length < 4) return false;
+  if (/^\d+$/.test(t)) return false;
+  if (t.endsWith(":")) return false;
+  if (/^\d+\s+(day|days)/i.test(t)) return false;
+  if (GFG_NON_PROBLEM_LABELS.has(t.toLowerCase())) return false;
+  return true;
+}
+
 function normalizeProblemEntry(entry) {
   if (!entry) return null;
   if (typeof entry === "string") {
     const title = entry.trim();
-    return title ? { title } : null;
+    if (!isPlausibleProblemTitle(title)) return null;
+    return { title };
   }
   if (typeof entry !== "object") return null;
   const title = pickText(entry, [
+    "pname",          // GFG submissions API: { pname: "...", slug: "...", user_subtime: "..." }
     "title",
     "name",
     "problem_name",
     "problemName",
     "problem_title",
     "problemTitle",
-    "slug",
   ]);
-  if (!title) return null;
+  if (!title || !isPlausibleProblemTitle(title)) return null;
   return {
     title,
     url: pickText(entry, ["url", "link", "href", "problem_url", "problemUrl"]),
@@ -251,6 +283,11 @@ function normalizeProblemBucket(bucket) {
   if (!bucket) return [];
   if (Array.isArray(bucket)) return bucket.map(normalizeProblemEntry).filter(Boolean);
   if (typeof bucket === "object") {
+    // If ALL values are primitives (numbers/strings/null), this is a stats-summary
+    // map like { "Coding Score": 33 }, not a problem list — skip it entirely.
+    const values = Object.values(bucket);
+    const isStatMap = values.length > 0 && values.every((v) => v === null || typeof v !== "object");
+    if (isStatMap) return [];
     return Object.entries(bucket)
       .map(([key, value]) => normalizeProblemEntry(value) || normalizeProblemEntry(key))
       .filter(Boolean);
@@ -338,17 +375,38 @@ function normalizeTopicStats(roots = []) {
     .slice(0, 12);
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function normalizeActivityCalendar(roots = []) {
   const byDate = {};
   for (const root of roots) {
     walk(root, (node) => {
       if (Array.isArray(node)) return;
-      const date = normalizeDate(
-        node.date || node.submission_date || node.submissionDate || node.created_at || node.createdAt || node.day
+
+      // Format A: { date: "YYYY-MM-DD", count: N, ... } — standard per-submission node.
+      const dateField = normalizeDate(
+        node.date || node.submission_date || node.submissionDate ||
+        node.created_at || node.createdAt || node.day
       );
-      if (!date) return;
-      const count = firstNumber(node.count, node.value, node.total, node.solved, node.submissions) || 1;
-      byDate[date] = (byDate[date] || 0) + count;
+      if (dateField) {
+        // Only count nodes that have an explicit positive count — never default to 1,
+        // as that causes stat-data nodes (which just happen to have a date field) to
+        // be counted as activity.
+        const count = firstNumber(node.count, node.submissions);
+        if (count) byDate[dateField] = (byDate[dateField] || 0) + count;
+        return;
+      }
+
+      // Format B: { "YYYY-MM-DD": N, "YYYY-MM-DD": M, ... } — date-keyed heatmap.
+      // GFG often serialises its contribution calendar in this format. Only treat as
+      // a heatmap when every key in the object looks like an ISO date string.
+      const keys = Object.keys(node);
+      if (keys.length >= 1 && keys.every((k) => ISO_DATE_RE.test(k))) {
+        for (const [k, v] of Object.entries(node)) {
+          const n = typeof v === "number" ? v : safeNum(v);
+          if (n > 0) byDate[k] = (byDate[k] || 0) + n;
+        }
+      }
     });
   }
   return Object.entries(byDate)
@@ -356,11 +414,20 @@ function normalizeActivityCalendar(roots = []) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Known GFG profile stat labels that are NOT problem titles.
+const GFG_STAT_LABELS = new Set([
+  "coding score", "problems solved", "institute rank", "articles published",
+  "monthly score", "current streak", "max streak", "longest streak",
+  "potd solved", "school", "basic", "easy", "medium", "hard",
+]);
+
 function normalizeRecentActivity(roots = []) {
   const out = [];
   for (const root of roots) {
     walk(root, (node) => {
       if (Array.isArray(node)) return;
+      // Only use problem-specific keys — never "name" or "title" alone, as those
+      // match every stat row on the profile page.
       const title = pickText(node, [
         "problem_name",
         "problemName",
@@ -368,11 +435,15 @@ function normalizeRecentActivity(roots = []) {
         "problemTitle",
         "article_title",
         "articleTitle",
-        "title",
-        "name",
       ]);
       if (!title) return;
+      // Must look like an actual problem title (length > 3, not a raw number, not a stat label).
+      if (title.length <= 3) return;
+      if (/^\d+$/.test(title.trim())) return;
+      if (GFG_STAT_LABELS.has(title.toLowerCase().trim())) return;
+      // Must have an explicit date — bare stat objects don't track submission dates.
       const date = normalizeDate(node.date || node.created_at || node.createdAt || node.submission_date || node.submissionDate);
+      if (!date) return;
       const type = pickText(node, ["type", "eventType", "activityType", "status"]) || "activity";
       const difficulty = pickText(node, ["difficulty", "level", "problem_level", "problemLevel"]);
       const url = pickText(node, ["url", "link", "href", "problem_url", "problemUrl"]);
@@ -401,23 +472,40 @@ function normalizePotdHistory(roots = []) {
 function parseActivityPage(html, username) {
   if (!html || typeof html !== "string") return {};
 
-  const activityRoots = [
+  // Calendar-only roots: pure per-day activity sources.
+  // Keep these separate from stats/problem roots so that cumulative
+  // per-difficulty counts in submissionsInfo/solvedStats don't get
+  // mis-attributed as single-day activity in normalizeActivityCalendar.
+  const calendarRoots = [
     extractObjectAfterKey(html, "activityData"),
-    extractObjectAfterKey(html, "recentActivity"),
     extractObjectAfterKey(html, "userActivity"),
-    extractObjectAfterKey(html, "submissionsInfo"),
-    extractObjectAfterKey(html, "userSubmissionsInfo"),
-    extractObjectAfterKey(html, "solvedStats"),
     extractObjectAfterKey(html, "calendarData"),
     extractObjectAfterKey(html, "heatMap"),
+    extractObjectAfterKey(html, "heatmap"),
+    extractObjectAfterKey(html, "submissionCalendar"),
+    extractObjectAfterKey(html, "activityCalendar"),
+    extractObjectAfterKey(html, "activityHeatmap"),
+    extractObjectAfterKey(html, "contributions"),
+    extractObjectAfterKey(html, "userContributions"),
+    extractObjectAfterKey(html, "dailyActivity"),
+  ].filter(Boolean);
+
+  const activityRoots = [
+    ...calendarRoots,
+    extractObjectAfterKey(html, "recentActivity"),
     extractObjectAfterKey(html, "potdData"),
+    // Note: submissionsInfo / userSubmissionsInfo / solvedStats are intentionally
+    // excluded here. On the activity tab page those keys contain cumulative
+    // stats-summary objects (not per-problem lists), which contaminate both the
+    // calendar (wrong dates) and solvedProblems (garbage titles like month names).
+    // Actual problem data is extracted from userSubmissionsInfo in shapeFromAuthPracticeHtml.
   ].filter(Boolean);
 
   const userData = extractObjectAfterKey(html, "userData");
   const info = userData?.data || userData?.userData?.data || {};
   const articleCount = extractObjectAfterKey(html, "articleCount") || {};
 
-  const activityCalendar = normalizeActivityCalendar(activityRoots);
+  const activityCalendar = normalizeActivityCalendar(calendarRoots);
   const topicStats = normalizeTopicStats(activityRoots);
   const totalTopics = topicStats.reduce((sum, item) => sum + item.solved, 0);
 
@@ -636,11 +724,66 @@ function mergeActivityEnrichment(base, enrichment = {}) {
   return merged;
 }
 
+/**
+ * Fetch the full submission history from GFG's practice API.
+ * Returns shaped enrichment data: activityCalendar, recentActivity,
+ * solvedDetails, solvedProblems, and problemsSolved.
+ *
+ * Response shape:
+ *   { status: "success", result: { Medium: { id: { pname, slug, lang, user_subtime } } }, count: N }
+ */
+async function fetchSubmissionsData(username) {
+  try {
+    const { data } = await practiceApi.post(
+      "/api/v1/user/problems/submissions/",
+      { handle: username }
+    );
+
+    if (data?.status !== "success" || !data?.result) return null;
+
+    // Reuse the same extractor used for __NEXT_DATA__ (same shape).
+    const parsed = extractCalendarFromSubmissions(data.result);
+    if (!parsed?.activityCalendar?.length) return null;
+
+    const solvedDetails = normalizeSolvedDetails(data.result);
+    const solvedProblems = normalizeSolvedProblemLists(data.result);
+    const totalSolved = safeNum(data.count) ||
+      Object.values(solvedDetails).reduce((s, n) => s + n, 0);
+
+    logger.info("GFG submissions API ok", {
+      username,
+      total: totalSolved,
+      activeDays: parsed.activityCalendar.length,
+    });
+
+    return {
+      activityCalendar: parsed.activityCalendar,
+      recentActivity: parsed.recentActivity,
+      solvedDetails,
+      solvedProblems,
+      problemsSolved: totalSolved || undefined,
+    };
+  } catch (err) {
+    logger.warn("GFG submissions API failed", { username, error: err.message });
+    return null;
+  }
+}
+
 async function enrichFromActivityPage(shaped, username, encoded, errors) {
+  // Primary enrichment: direct submissions API → gives exact per-day activityCalendar,
+  // per-problem recentActivity, and accurate difficulty breakdown.
+  const submissionsEnrichment = await fetchSubmissionsData(username);
+  if (submissionsEnrichment) {
+    shaped = mergeActivityEnrichment(shaped, submissionsEnrichment);
+  }
+
+  // Secondary enrichment: HTML scrape of the activity tab → fills in topic stats,
+  // POTD history, and any calendar data not covered by the submissions API.
   try {
     const { data } = await scraper.get(`/profile/${encoded}?tab=activity`);
     const enrichment = parseActivityPage(data, username);
     let merged = mergeActivityEnrichment(shaped, enrichment);
+    // Only run puppeteer if we still have no problem list after both passes.
     if (!Object.keys(merged.solvedProblems || {}).length) {
       const rendered = await parseRenderedActivityPage(username, encoded);
       merged = mergeActivityEnrichment(merged, rendered);
@@ -657,13 +800,108 @@ async function enrichFromActivityPage(shaped, username, encoded, errors) {
   }
 }
 
+/**
+ * Given a submissions object of the form:
+ *   { Difficulty: { submissionId: { pname, slug, lang, user_subtime } } }
+ *
+ * Extract per-day activityCalendar from user_subtime and build recentActivity.
+ * This works for both __NEXT_DATA__ pageProps.userSubmissionsInfo and the
+ * practiceapi response's result field (same shape).
+ */
+function extractCalendarFromSubmissions(submissions) {
+  if (!submissions || typeof submissions !== "object") return null;
+  const byDate = {};
+  const recent = [];
+
+  for (const [difficulty, bucket] of Object.entries(submissions)) {
+    if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) continue;
+    const diffKey = normalizeDifficulty(difficulty);
+
+    for (const problem of Object.values(bucket)) {
+      if (!problem || typeof problem !== "object") continue;
+      const { pname, slug, user_subtime } = problem;
+      const date = user_subtime ? String(user_subtime).slice(0, 10) : null;
+      if (!date || !ISO_DATE_RE.test(date)) continue;
+
+      byDate[date] = (byDate[date] || 0) + 1;
+      if (pname) {
+        recent.push({
+          type: "solved",
+          title: pname,
+          difficulty: diffKey,
+          date,
+          url: slug ? `https://www.geeksforgeeks.org/problems/${slug}/1` : null,
+        });
+      }
+    }
+  }
+
+  const activityCalendar = Object.entries(byDate)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (!activityCalendar.length) return null;
+
+  recent.sort((a, b) => b.date.localeCompare(a.date));
+  return { activityCalendar, recentActivity: recent.slice(0, 10) };
+}
+
+/**
+ * Walk a parsed JSON object and find the best date-keyed heatmap object,
+ * i.e. an object whose keys are ALL ISO date strings (YYYY-MM-DD).
+ * Returns null if no suitable object is found.
+ */
+function findDateKeyedCalendar(root, seen = new Set()) {
+  if (!root || typeof root !== "object" || seen.has(root)) return null;
+  seen.add(root);
+  if (!Array.isArray(root)) {
+    const keys = Object.keys(root);
+    if (keys.length >= 2 && keys.every((k) => ISO_DATE_RE.test(k))) return root;
+  }
+  for (const value of Object.values(root)) {
+    const found = findDateKeyedCalendar(value, seen);
+    if (found) return found;
+  }
+  return null;
+}
+
 function shapeFromAuthPracticeHtml(html, username) {
   if (!html || typeof html !== "string") return null;
 
   const $ = cheerio.load(html);
   const raw = $("script#__NEXT_DATA__[type='application/json']").html() ||
     $("script#__NEXT_DATA__").html();
-  if (!raw) return shapeFromHtml(html, username, "gfg-auth-practice-stream");
+  if (!raw) {
+    // RSC streaming format — no __NEXT_DATA__ tag. Get profile data from the
+    // streaming chunks, then also try to extract submissions from the same chunks
+    // so we can derive activityCalendar from user_subtime.
+    const shaped = shapeFromHtml(html, username, "gfg-auth-practice-stream");
+    if (!shaped) return null;
+
+    const submissionsObj =
+      extractObjectAfterKey(html, "userSubmissionsInfo") ||
+      extractObjectAfterKey(html, "userSubmissions") ||
+      extractObjectAfterKey(html, "submissionsInfo");
+
+    if (submissionsObj) {
+      const fromSubs = extractCalendarFromSubmissions(submissionsObj);
+      if (fromSubs?.activityCalendar?.length) {
+        logger.info("GFG calendar extracted from RSC stream", {
+          username,
+          activeDays: fromSubs.activityCalendar.length,
+          total: fromSubs.activityCalendar.reduce((s, r) => s + r.count, 0),
+        });
+        return {
+          ...shaped,
+          activityCalendar: fromSubs.activityCalendar,
+          recentActivity: fromSubs.recentActivity,
+          solvedDetails: normalizeSolvedDetails(submissionsObj),
+          solvedProblems: normalizeSolvedProblemLists(submissionsObj),
+        };
+      }
+    }
+    return shaped;
+  }
 
   let nextData;
   try {
@@ -694,6 +932,39 @@ function shapeFromAuthPracticeHtml(html, username) {
   const solvedFromSubmissions = Object.values(solvedDetails)
     .reduce((sum, count) => sum + safeNum(count), 0);
 
+  // Primary: extract per-day calendar from user_subtime in each submission entry.
+  // This gives exact submission dates matching GFG's own heatmap.
+  const calendarFromSubmissions = extractCalendarFromSubmissions(submissions);
+
+  // Fallback: look for a date-keyed heatmap object in pageProps
+  // (e.g. { "YYYY-MM-DD": N }) in case GFG embeds it separately.
+  const calendarFallbackRoot =
+    pageProps.heatMap ||
+    pageProps.heatmap ||
+    pageProps.calendarData ||
+    pageProps.activityCalendar ||
+    pageProps.submissionCalendar ||
+    findDateKeyedCalendar(pageProps);
+  const calendarFromHeatmap = calendarFallbackRoot
+    ? normalizeActivityCalendar([calendarFallbackRoot])
+    : null;
+
+  // Prefer user_subtime-derived calendar (more granular); fall back to heatmap keys.
+  const activityCalendar =
+    (calendarFromSubmissions?.activityCalendar?.length && calendarFromSubmissions.activityCalendar) ||
+    (calendarFromHeatmap?.length && calendarFromHeatmap) ||
+    null;
+
+  const recentFromSubmissions = calendarFromSubmissions?.recentActivity || null;
+
+  if (activityCalendar) {
+    logger.info("GFG calendar extracted from __NEXT_DATA__", {
+      username,
+      activeDays: activityCalendar.length,
+      total: activityCalendar.reduce((s, r) => s + r.count, 0),
+    });
+  }
+
   return {
     profile: {
       username,
@@ -722,6 +993,8 @@ function shapeFromAuthPracticeHtml(html, username) {
     monthlyScore: safeNum(userInfo.monthly_score ?? userInfo.monthlyScore),
     solvedDetails,
     solvedProblems,
+    ...(activityCalendar ? { activityCalendar } : {}),
+    ...(recentFromSubmissions ? { recentActivity: recentFromSubmissions } : {}),
     source: "gfg-auth-practice-next-data",
     fetchedAt: new Date().toISOString(),
   };

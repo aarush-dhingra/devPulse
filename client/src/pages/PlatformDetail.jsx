@@ -1341,7 +1341,16 @@ function buildGFGCommand(stats, activity) {
   const hard = Number(solved.hard || solved.Hard || 0);
   const totalSolved = stats.problemsSolved || 0;
   const activityRows = normalizeGfgActivityRows(stats.activityCalendar);
-  const rows = activityRows.length ? activityRows : activity.rows;
+
+  // Guard against a scraped activityCalendar that is actually a cumulative
+  // count misattributed to a single day (e.g. all 9 "ever-solved" problems
+  // pinned to today because the scraper summed difficulty buckets under one date).
+  // If there is only 1 row and its count matches the total lifetime solved count,
+  // it cannot represent real per-day activity — fall back to the snapshot-delta rows.
+  const isSuspectCalendar =
+    activityRows.length === 1 && activityRows[0].count >= totalSolved && totalSolved > 0;
+
+  const rows = (activityRows.length && !isSuspectCalendar) ? activityRows : activity.rows;
   const weekly = activityRows.length ? weeklyBuckets(rows).slice(-18) : activity.weekly;
   const total = rows.reduce((sum, row) => sum + Number(row.count || 0), 0);
   const activeDays = rows.filter((row) => Number(row.count || 0) > 0).length;
