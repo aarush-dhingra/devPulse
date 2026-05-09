@@ -136,4 +136,35 @@ async function fetchAll(username) {
   }
 }
 
-module.exports = { fetchAll };
+async function fetchDaily() {
+  const res = await client.get("/daily");
+  const d = res?.data || {};
+  return {
+    title:       d.questionTitle    || null,
+    difficulty:  d.difficulty       || null,
+    link:        d.questionLink     || null,
+    date:        d.date             || null,
+    isPaidOnly:  d.isPaidOnly       || false,
+    tags:        (d.topicTags || []).slice(0, 3).map((t) => t.name),
+  };
+}
+
+async function fetchUpcomingContests() {
+  const res = await client.get("/contests");
+  const all = res?.data?.allContests || [];
+  const now = Math.floor(Date.now() / 1000);
+  const upcoming = all
+    .filter((c) => c.startTime > now && !c.isVirtual)
+    .sort((a, b) => a.startTime - b.startTime)
+    .slice(0, 2)
+    .map((c) => ({
+      title:     c.title,
+      titleSlug: c.titleSlug,
+      startTime: c.startTime,
+      duration:  c.duration,
+      link:      `https://leetcode.com/contest/${c.titleSlug}`,
+    }));
+  return upcoming;
+}
+
+module.exports = { fetchAll, fetchDaily, fetchUpcomingContests };

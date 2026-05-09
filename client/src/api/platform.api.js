@@ -10,4 +10,8 @@ export const platformApi = {
     api
       .delete(`/platform/${encodeURIComponent(platform)}`)
       .then((r) => r.data),
+  leetcodeDaily: () =>
+    api.get("/platform/leetcode/daily").then((r) => r.data),
+  leetcodeUpcomingContests: () =>
+    api.get("/platform/leetcode/upcoming-contests").then((r) => r.data),
 };

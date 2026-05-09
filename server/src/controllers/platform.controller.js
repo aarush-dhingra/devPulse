@@ -124,8 +124,28 @@ async function disconnectPlatform(req, res, next) {
   }
 }
 
+async function getLeetCodeDaily(req, res, next) {
+  try {
+    const data = await leetcodeService.fetchDaily();
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getLeetCodeUpcomingContests(req, res, next) {
+  try {
+    const contests = await leetcodeService.fetchUpcomingContests();
+    res.json({ contests });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listMyPlatforms,
   connectPlatform,
   disconnectPlatform,
+  getLeetCodeDaily,
+  getLeetCodeUpcomingContests,
 };

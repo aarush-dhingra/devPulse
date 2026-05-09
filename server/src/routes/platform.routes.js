@@ -5,6 +5,7 @@ const { z } = require("zod");
 const platformController = require("../controllers/platform.controller");
 const { requireAuth } = require("../middlewares/auth.middleware");
 const { validate } = require("../middlewares/validate.middleware");
+const { cache } = require("../middlewares/cache.middleware");
 
 const router = express.Router();
 
@@ -17,6 +18,18 @@ const connectSchema = z.object({
 });
 
 router.get("/", requireAuth, platformController.listMyPlatforms);
+
+router.get(
+  "/leetcode/daily",
+  cache({ ttl: 3600, key: () => "cache:leetcode:daily" }),
+  platformController.getLeetCodeDaily
+);
+
+router.get(
+  "/leetcode/upcoming-contests",
+  cache({ ttl: 3600, key: () => "cache:leetcode:upcoming-contests" }),
+  platformController.getLeetCodeUpcomingContests
+);
 
 router.post(
   "/connect",

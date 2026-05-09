@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   XAxis,
@@ -32,6 +32,7 @@ import { PLATFORM_BY_ID, colorForLang } from "../utils/constants";
 import { chartTheme } from "../utils/chartConfigs";
 import ChartTooltip from "../components/ui/ChartTooltip";
 import PlatformLogo, { PLATFORM_LOGO_PATHS } from "../components/ui/PlatformLogo";
+import { platformApi } from "../api/platform.api";
 
 const PERIOD_COPY = {
   "7d": "last 7 days",
@@ -594,6 +595,12 @@ function LeetCodeBody({ stats, activity, period, accent }) {
         <LeetCodeRhythmPanel command={command} accent={accent} />
         <LeetCodeStreakJourney command={command} accent={accent} />
       </div>
+
+      {/* ROW 5: Daily Challenge + Upcoming Contests */}
+      <div className="grid xl:grid-cols-[1fr_1fr] gap-3 items-stretch">
+        <LeetCodeDailyChallenge />
+        <LeetCodeUpcomingContests />
+      </div>
     </div>
   );
 }
@@ -1097,6 +1104,131 @@ function LeetCodeContestPerformance({ command }) {
         </div>
       ) : (
         <EmptyState icon="🏆" title="No contest data" description="Refresh to load your contest history." />
+      )}
+    </div>
+  );
+}
+
+const DIFF_COLORS = { Easy: "#22c55e", Medium: "#f59e0b", Hard: "#ef4444" };
+
+function LeetCodeDailyChallenge() {
+  const [daily, setDaily] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    platformApi.leetcodeDaily()
+      .then(setDaily)
+      .catch(() => setDaily(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-3 flex items-center gap-2">
+        <span>📅</span> Daily Challenge
+      </h3>
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center text-ink-faint text-sm">Loading…</div>
+      ) : !daily ? (
+        <EmptyState icon="📅" title="Unavailable" description="Could not fetch today's daily challenge." />
+      ) : (
+        <div className="flex-1 flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-ink-faint mb-1">{daily.date}</p>
+              <p className="font-semibold text-sm leading-snug">{daily.title}</p>
+              {daily.isPaidOnly && (
+                <span className="mt-1 inline-block text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">Premium</span>
+              )}
+            </div>
+            <a
+              href={daily.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+            >
+              Open ↗
+            </a>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {daily.difficulty && (
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ color: DIFF_COLORS[daily.difficulty] || "#94a3b8", background: `${DIFF_COLORS[daily.difficulty] || "#94a3b8"}22` }}
+              >
+                {daily.difficulty}
+              </span>
+            )}
+            {daily.tags.map((tag) => (
+              <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-ink-faint border border-white/5">{tag}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeetCodeUpcomingContests() {
+  const [contests, setContests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    platformApi.leetcodeUpcomingContests()
+      .then((data) => setContests(data.contests || []))
+      .catch(() => setContests([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  function formatCountdown(startTime) {
+    const diff = startTime * 1000 - Date.now();
+    if (diff <= 0) return "Starting now";
+    const days = Math.floor(diff / 86400000);
+    const hrs = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    if (days > 0) return `in ${days}d ${hrs}h`;
+    if (hrs > 0) return `in ${hrs}h ${mins}m`;
+    return `in ${mins}m`;
+  }
+
+  function formatStart(startTime) {
+    return new Date(startTime * 1000).toLocaleDateString(undefined, {
+      weekday: "short", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-3 flex items-center gap-2">
+        <span>🏆</span> Upcoming Contests
+      </h3>
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center text-ink-faint text-sm">Loading…</div>
+      ) : contests.length === 0 ? (
+        <EmptyState icon="🏆" title="No upcoming contests" description="Check leetcode.com for the schedule." />
+      ) : (
+        <div className="flex-1 flex flex-col gap-3">
+          {contests.map((c) => (
+            <div key={c.titleSlug} className="flex items-center justify-between gap-2 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">{c.title}</p>
+                <p className="text-[11px] text-ink-faint mt-0.5">{formatStart(c.startTime)}</p>
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-1">
+                <span className="text-[11px] font-bold text-emerald-400">{formatCountdown(c.startTime)}</span>
+                <a
+                  href={c.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                >
+                  Register ↗
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
