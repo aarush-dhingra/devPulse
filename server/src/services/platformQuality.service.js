@@ -34,7 +34,12 @@ function buildQuality(platform, data) {
       safeNum(data.streak) > 0 ||
       safeNum(data.maxStreak) > 0 ||
       safeNum(data.monthlyScore) > 0 ||
-      objectHasValues(data.solvedDetails);
+      safeNum(data.articlesPublished) > 0 ||
+      safeNum(data.potdSolved) > 0 ||
+      objectHasValues(data.solvedDetails) ||
+      objectHasValues(data.solvedProblems) ||
+      objectHasValues(data.topicStats) ||
+      objectHasValues(data.activityCalendar);
     const hasProfileEvidence =
       hasMeaningfulName(data.profile) ||
       hasText(data.profile?.institute) ||

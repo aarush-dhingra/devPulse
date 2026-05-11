@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useStatsStore } from "../../store/statsStore";
+import NotificationBell from "../community/notifications/NotificationBell";
 
 const QUOTES = [
   "Code. Learn. Optimize. Repeat.",
@@ -68,6 +69,8 @@ export default function TopBar() {
             ↵
           </kbd>
         </form>
+
+        <NotificationBell />
 
         <button
           onClick={onRefresh}

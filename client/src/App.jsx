@@ -99,7 +99,7 @@ export default function App() {
           }
         />
         <Route
-          path="/community"
+          path="/community/*"
           element={
             <ProtectedRoute>
               <Community />

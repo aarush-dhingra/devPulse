@@ -43,6 +43,12 @@ function normalizeBeforeSave(platform, data) {
   return data;
 }
 
+async function enrichGfgBeforeSave(userId, data) {
+  // recentActivity is now populated with real submission dates directly from the
+  // GFG submissions API (user_subtime). No further enrichment is needed here.
+  return data;
+}
+
 async function refreshUser(userId) {
   const platforms = await platformModel.listForUser(userId);
   const results = [];
@@ -54,7 +60,11 @@ async function refreshUser(userId) {
     const full = await platformModel.findOne(userId, p.platform_name);
     try {
       const t0 = Date.now();
-      const data = normalizeBeforeSave(p.platform_name, await fetcher(full));
+      let fetched = await fetcher(full);
+      if (p.platform_name === "gfg") {
+        fetched = await enrichGfgBeforeSave(userId, fetched);
+      }
+      const data = normalizeBeforeSave(p.platform_name, fetched);
       await statsModel.saveSnapshot({
         userId,
         platform: p.platform_name,

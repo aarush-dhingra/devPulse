@@ -27,19 +27,28 @@ function normalizeCalendar(rawCalendar) {
 }
 
 async function fetchAll(username) {
+  const u = encodeURIComponent(username);
   try {
-    const [profileRes, solvedRes, badgesRes, contestRes, calendarRes] = await Promise.all([
-      client.get(`/${encodeURIComponent(username)}`).catch(() => null),
-      client.get(`/${encodeURIComponent(username)}/solved`).catch(() => null),
-      client.get(`/${encodeURIComponent(username)}/badges`).catch(() => null),
-      client.get(`/${encodeURIComponent(username)}/contest`).catch(() => null),
-      client.get(`/${encodeURIComponent(username)}/calendar`).catch(() => null),
+    const [
+      profileRes, solvedRes, badgesRes, contestRes, calendarRes,
+      fullProfileRes, skillRes, contestHistoryRes, languageRes,
+    ] = await Promise.all([
+      client.get(`/${u}`).catch(() => null),
+      client.get(`/${u}/solved`).catch(() => null),
+      client.get(`/${u}/badges`).catch(() => null),
+      client.get(`/${u}/contest`).catch(() => null),
+      client.get(`/${u}/calendar`).catch(() => null),
+      client.get(`/${u}/profile`).catch(() => null),
+      client.get(`/${u}/skill`).catch(() => null),
+      client.get(`/${u}/contest/history`).catch(() => null),
+      client.get(`/${u}/language`).catch(() => null),
     ]);
 
     const profile = profileRes?.data || {};
     const solved = solvedRes?.data || {};
     const badges = badgesRes?.data?.badges || [];
     const contest = contestRes?.data || {};
+    const fullProfile = fullProfileRes?.data || {};
 
     const easy = safeNum(solved.easySolved);
     const medium = safeNum(solved.mediumSolved);
@@ -49,20 +58,65 @@ async function fetchAll(username) {
     const calRaw =
       calendarRes?.data?.submissionCalendar ??
       calendarRes?.data?.matchedUser?.userCalendar?.submissionCalendar ??
+      fullProfile.submissionCalendar ??
       null;
     const dailySubmissions = normalizeCalendar(calRaw);
+
+    const totalSubs = safeNum(solved.totalSubmissionNum?.[0]?.submissions);
+    const acSubs = safeNum(solved.acSubmissionNum?.[0]?.submissions);
+    const acceptanceRate = totalSubs > 0
+      ? Math.round((acSubs / totalSubs) * 1000) / 10
+      : 0;
+
+    const recentSolves = (fullProfile.recentSubmissions || [])
+      .filter((s) => s.statusDisplay === "Accepted")
+      .slice(0, 10)
+      .map((s) => ({
+        title: s.title,
+        titleSlug: s.titleSlug,
+        timestamp: s.timestamp,
+        lang: s.lang,
+      }));
+
+    const totalEasy = safeNum(fullProfile.totalEasy);
+    const totalMedium = safeNum(fullProfile.totalMedium);
+    const totalHard = safeNum(fullProfile.totalHard);
+
+    const skillData = skillRes?.data || {};
+    const skillStats = {
+      fundamental:  skillData.fundamental  || [],
+      intermediate: skillData.intermediate || [],
+      advanced:     skillData.advanced     || [],
+    };
+
+    const contestHistory = (contestHistoryRes?.data?.contestHistory || [])
+      .map((c) => ({
+        title:     c.contest?.title,
+        startTime: c.contest?.startTime,
+        rating:    c.rating,
+        ranking:   c.ranking,
+        solved:    c.problemsSolved,
+        total:     c.totalProblems,
+        trend:     c.trendDirection,
+      }));
+
+    const languageStats = (languageRes?.data?.languageProblemCount || [])
+      .sort((a, b) => b.problemsSolved - a.problemsSolved);
 
     return {
       profile: {
         username: profile.username || username,
         name: profile.name,
         avatar: profile.avatar,
-        ranking: safeNum(profile.ranking),
-        reputation: safeNum(profile.reputation),
+        ranking: safeNum(profile.ranking || fullProfile.ranking),
+        reputation: safeNum(profile.reputation || fullProfile.reputation),
         country: profile.country,
       },
       solved: { total, easy, medium, hard },
-      acceptanceRate: safeNum(profile.acceptanceRate),
+      acceptanceRate,
+      totalEasy,
+      totalMedium,
+      totalHard,
       contest: {
         rating: safeNum(contest.contestRating),
         attended: safeNum(contest.contestAttend),
@@ -70,6 +124,10 @@ async function fetchAll(username) {
       },
       badges,
       dailySubmissions,
+      recentSolves,
+      skillStats,
+      contestHistory,
+      languageStats,
       fetchedAt: new Date().toISOString(),
     };
   } catch (err) {
@@ -78,4 +136,35 @@ async function fetchAll(username) {
   }
 }
 
-module.exports = { fetchAll };
+async function fetchDaily() {
+  const res = await client.get("/daily");
+  const d = res?.data || {};
+  return {
+    title:       d.questionTitle    || null,
+    difficulty:  d.difficulty       || null,
+    link:        d.questionLink     || null,
+    date:        d.date             || null,
+    isPaidOnly:  d.isPaidOnly       || false,
+    tags:        (d.topicTags || []).slice(0, 3).map((t) => t.name),
+  };
+}
+
+async function fetchUpcomingContests() {
+  const res = await client.get("/contests");
+  const all = res?.data?.allContests || [];
+  const now = Math.floor(Date.now() / 1000);
+  const upcoming = all
+    .filter((c) => c.startTime > now && !c.isVirtual)
+    .sort((a, b) => a.startTime - b.startTime)
+    .slice(0, 2)
+    .map((c) => ({
+      title:     c.title,
+      titleSlug: c.titleSlug,
+      startTime: c.startTime,
+      duration:  c.duration,
+      link:      `https://leetcode.com/contest/${c.titleSlug}`,
+    }));
+  return upcoming;
+}
+
+module.exports = { fetchAll, fetchDaily, fetchUpcomingContests };

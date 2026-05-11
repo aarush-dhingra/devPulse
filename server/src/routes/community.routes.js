@@ -2,39 +2,45 @@
 
 const express = require("express");
 const { z } = require("zod");
-const communityController = require("../controllers/community.controller");
+const ctrl = require("../controllers/community.controller");
 const { requireAuth, optionalAuth } = require("../middlewares/auth.middleware");
 const { validate } = require("../middlewares/validate.middleware");
 
 const router = express.Router();
 
-// follows
-router.post(
-  "/follow/:username",
-  requireAuth,
-  validate({ params: z.object({ username: z.string().min(1) }) }),
-  communityController.follow
-);
-router.delete(
-  "/follow/:username",
-  requireAuth,
-  validate({ params: z.object({ username: z.string().min(1) }) }),
-  communityController.unfollow
-);
+const usernameParam = validate({ params: z.object({ username: z.string().min(1) }) });
 
-// activity feed (events from followed users)
-router.get("/feed", requireAuth, communityController.getFeed);
+// ── Follows ─────────────────────────────────────────────────────────────────
+router.post("/follow/:username",    requireAuth, usernameParam, ctrl.follow);
+router.delete("/follow/:username",  requireAuth, usernameParam, ctrl.unfollow);
 
-// followers/following
-router.get("/u/:username/followers", optionalAuth, communityController.getFollowers);
-router.get("/u/:username/following", optionalAuth, communityController.getFollowing);
+// ── Activity feed (legacy events from followed users) ────────────────────────
+router.get("/feed", requireAuth, ctrl.getFeed);
 
-// posts
-router.get("/posts", optionalAuth, communityController.listPosts);
-router.post("/posts", requireAuth, communityController.createPost);
-router.delete("/posts/:id", requireAuth, communityController.deletePost);
-router.post("/posts/:id/like", requireAuth, communityController.toggleLike);
-router.get("/posts/:id/replies", optionalAuth, communityController.listReplies);
-router.post("/posts/:id/replies", requireAuth, communityController.createReply);
+// ── User profiles ────────────────────────────────────────────────────────────
+router.get("/u/:username",           optionalAuth, ctrl.getUserProfile);
+router.get("/u/:username/followers", optionalAuth, ctrl.getFollowers);
+router.get("/u/:username/following", optionalAuth, ctrl.getFollowing);
+router.get("/u/:username/posts",     optionalAuth, ctrl.getUserPosts);
+
+// ── Posts ────────────────────────────────────────────────────────────────────
+router.get("/posts",       optionalAuth, ctrl.listPosts);
+router.post("/posts",      requireAuth,  ctrl.createPost);
+router.get("/posts/:id",   optionalAuth, ctrl.getPost);
+router.patch("/posts/:id", requireAuth,  ctrl.editPost);
+router.delete("/posts/:id",requireAuth,  ctrl.deletePost);
+
+router.post("/posts/:id/like",     requireAuth, ctrl.toggleLike);
+router.post("/posts/:id/bookmark", requireAuth, ctrl.toggleBookmark);
+
+router.get("/posts/:id/replies",  optionalAuth, ctrl.listReplies);
+router.post("/posts/:id/replies", requireAuth,  ctrl.createReply);
+
+// ── Bookmarks ────────────────────────────────────────────────────────────────
+router.get("/bookmarks", requireAuth, ctrl.listBookmarks);
+
+// ── People discovery ─────────────────────────────────────────────────────────
+router.get("/search",      optionalAuth, ctrl.searchUsers);
+router.get("/suggestions", requireAuth,  ctrl.suggestedPeople);
 
 module.exports = router;
