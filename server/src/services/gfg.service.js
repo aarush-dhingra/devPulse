@@ -705,7 +705,7 @@ function mergeActivityEnrichment(base, enrichment = {}) {
   ]) {
     if (safeNum(enrichment[key]) > 0) merged[key] = safeNum(enrichment[key]);
   }
-  for (const key of ["activityCalendar", "recentActivity", "potdHistory", "topicStats", "topicMastery"]) {
+  for (const key of ["activityCalendar", "recentActivity", "potdHistory", "topicStats", "topicMastery", "languageStats"]) {
     if (Array.isArray(enrichment[key]) && enrichment[key].length) merged[key] = enrichment[key];
   }
   if (enrichment.publicPotd) merged.publicPotd = enrichment.publicPotd;
@@ -759,6 +759,7 @@ async function fetchSubmissionsData(username) {
     return {
       activityCalendar: parsed.activityCalendar,
       recentActivity: parsed.recentActivity,
+      languageStats: parsed.languageStats || [],
       solvedDetails,
       solvedProblems,
       problemsSolved: totalSolved || undefined,
@@ -812,6 +813,7 @@ function extractCalendarFromSubmissions(submissions) {
   if (!submissions || typeof submissions !== "object") return null;
   const byDate = {};
   const recent = [];
+  const langCounts = {};
 
   for (const [difficulty, bucket] of Object.entries(submissions)) {
     if (!bucket || typeof bucket !== "object" || Array.isArray(bucket)) continue;
@@ -819,11 +821,17 @@ function extractCalendarFromSubmissions(submissions) {
 
     for (const problem of Object.values(bucket)) {
       if (!problem || typeof problem !== "object") continue;
-      const { pname, slug, user_subtime } = problem;
+      const { pname, slug, lang, user_subtime } = problem;
       const date = user_subtime ? String(user_subtime).slice(0, 10) : null;
       if (!date || !ISO_DATE_RE.test(date)) continue;
 
       byDate[date] = (byDate[date] || 0) + 1;
+
+      if (lang) {
+        const normalized = String(lang).trim();
+        if (normalized) langCounts[normalized] = (langCounts[normalized] || 0) + 1;
+      }
+
       if (pname) {
         recent.push({
           type: "solved",
@@ -843,7 +851,12 @@ function extractCalendarFromSubmissions(submissions) {
   if (!activityCalendar.length) return null;
 
   recent.sort((a, b) => b.date.localeCompare(a.date));
-  return { activityCalendar, recentActivity: recent.slice(0, 10) };
+
+  const languageStats = Object.entries(langCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return { activityCalendar, recentActivity: recent.slice(0, 10), languageStats };
 }
 
 /**

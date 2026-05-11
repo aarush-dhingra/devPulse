@@ -1317,21 +1317,36 @@ function GFGBody({ stats, activity, period, accent }) {
         <GFGMetricCard label="POTD Solved" value={command.potdSolved} color="#ef4444" icon="📅" />
       </div>
 
-      {/* ROW 2: Trend + Heatmap */}
-      <div className="grid xl:grid-cols-[1fr_1.55fr] gap-3 items-stretch">
+      {/* ROW 2: Difficulty Donut, Trend, Small Cards */}
+      <div className="grid xl:grid-cols-[1.1fr_2fr_0.9fr] gap-3 items-stretch">
+        <GFGDifficultyBreakdown command={command} />
         <GFGTrendChart command={command} accent={accent} />
-        <GFGHeatmapPanel command={command} accent={accent} period={period} />
+        <div className="flex flex-col gap-3">
+          <GFGMetricCard
+            label="Monthly Score"
+            value={command.monthlyScore > 0 ? command.monthlyScore : "—"}
+            color="#10b981"
+            sub={command.monthlyScore > 0 ? "GFG score this month" : "No score this month"}
+          />
+          <GFGConsistencyCard command={command} />
+        </div>
       </div>
 
-      {/* ROW 3/4: compact cards with expanded performance summary */}
+      {/* ROW 3: Heatmap, Recent Activity */}
+      <div className="grid xl:grid-cols-[2fr_1fr] gap-3 items-stretch">
+        <GFGHeatmapPanel command={command} accent={accent} period={period} />
+        <GFGRecentActivity command={command} />
+      </div>
+
+      {/* ROW 4/5: 3-col grid — Rhythm+Streak top, POTD+XP bottom, Performance spans both rows on the right */}
       <div className="grid xl:grid-cols-3 gap-3 items-stretch">
-        <GFGDifficultyBreakdown command={command} />
-        <GFGStreakCalendar command={command} accent="#f59e0b" period={period} />
+        <GFGRhythmPanel command={command} accent={accent} />
+        <GFGStreakJourney command={command} accent={accent} />
         <div className="xl:row-span-2">
           <GFGPerformanceSummary command={command} />
         </div>
-        <GFGRecentActivity command={command} />
         <GFGPotdHistory command={command} />
+        <GFGLanguageStats command={command} />
       </div>
     </div>
   );
@@ -1339,6 +1354,8 @@ function GFGBody({ stats, activity, period, accent }) {
 
 function buildGFGCommand(stats, activity, period = "90d") {
   const solved = stats.solvedDetails || {};
+  const school = Number(solved.school || solved.School || 0);
+  const basic = Number(solved.basic || solved.Basic || 0);
   const easy = Number(solved.easy || solved.Easy || 0);
   const medium = Number(solved.medium || solved.Medium || 0);
   const hard = Number(solved.hard || solved.Hard || 0);
@@ -1374,10 +1391,13 @@ function buildGFGCommand(stats, activity, period = "90d") {
     .filter((r) => (r.date || "") >= thirtyDaysCutoffStr)
     .reduce((sum, row) => sum + Number(row.count || 0), 0);
   const spark = weekly.map(w => w.count);
+  const weekday = buildWeekdayTotals(rows);
 
   return {
     ...activity,
     rows,
+    allRows: allActivityRows,
+    heatmapRows: activity.rows,
     weekly,
     total,
     totalDisplay: formatActivity(total, activity.kind),
@@ -1387,9 +1407,12 @@ function buildGFGCommand(stats, activity, period = "90d") {
     bestDayDisplay: bestDay ? formatActivity(bestDay.count, activity.kind) : "—",
     score: stats.score || 0,
     totalSolved,
+    school,
+    basic,
     easy,
     medium,
     hard,
+    weekday,
     streakLongest: stats.maxStreak || streaks.longest || 0,
     streakCurrent: stats.streak || streaks.current || 0,
     instituteRank: stats.profile?.instituteRank?.toLocaleString?.() || stats.profile?.instituteRank || "—",
@@ -1408,7 +1431,8 @@ function buildGFGCommand(stats, activity, period = "90d") {
     },
     topicStats: stats.topicStats || [],
     topicMastery: stats.topicMastery || [],
-    performance: buildGfgPerformance(rows, stats.solvedDetails || {}),
+    languageStats: stats.languageStats || [],
+    performance: buildGfgPerformance(activity.rows, stats.solvedDetails || {}),
   };
 }
 
@@ -1518,12 +1542,12 @@ function GFGTrendChart({ command, accent }) {
         <h3 className="font-display font-bold text-base">Problem Solving Trend</h3>
         <span className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-ink-muted">Weekly</span>
       </div>
-      <div className="h-52">
+      <div className="h-40">
         <ResponsiveContainer>
-          <LineChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+          <LineChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={chartTheme.grid} vertical={false} />
             <XAxis dataKey="weekRange" tick={{ fill: chartTheme.text, fontSize: 10 }} axisLine={false} tickLine={false} minTickGap={24} />
-            <YAxis tick={{ fill: chartTheme.text, fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+            <YAxis tick={{ fill: chartTheme.text, fontSize: 10 }} axisLine={false} tickLine={false} width={35} allowDecimals={false} />
             <Tooltip content={<ChartTooltip />} />
             <Line type="monotone" dataKey="count" name="Activity" stroke={accent} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
           </LineChart>
@@ -1533,21 +1557,114 @@ function GFGTrendChart({ command, accent }) {
   );
 }
 
+function GFGConsistencyCard({ command }) {
+  const last30 = (command.heatmapRows?.length ? command.heatmapRows : command.rows).slice(-30);
+  const activeLast30 = last30.filter((r) => r.count > 0).length;
+  const dots = [
+    ...Array(Math.max(0, 30 - last30.length)).fill(false),
+    ...last30.map((r) => r.count > 0),
+  ];
+  return (
+    <div className="rounded-2xl flex-1 border border-white/5 bg-[#080b18] px-4 py-4 flex flex-col">
+      <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted mb-2">Consistency</div>
+      <div className="flex items-end gap-2 mb-3">
+        <div className="text-3xl font-display font-bold tabular-nums text-white">{activeLast30}</div>
+        <div className="text-[10px] text-ink-faint pb-1">Active Days (30d)</div>
+      </div>
+      <div className="grid grid-cols-[repeat(15,minmax(0,1fr))] gap-1 mt-auto">
+        {dots.map((active, i) => (
+          <div
+            key={i}
+            className="aspect-square rounded-sm"
+            style={{ background: active ? "#10b981" : "rgba(255,255,255,0.06)" }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GFGRhythmPanel({ command, accent }) {
+  if (!command.weekday || !command.weekday.length) return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <h3 className="font-display font-bold text-base mb-2">Activity Rhythm</h3>
+      <EmptyState icon="📊" title="No data" description="No daily activity data found." />
+    </div>
+  );
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <h3 className="font-display font-bold text-base mb-2">Activity Rhythm</h3>
+      <div className="h-40">
+        <ResponsiveContainer>
+          <RadarChart cx="50%" cy="50%" outerRadius="70%" data={command.weekday}>
+            <PolarGrid stroke="rgba(255,255,255,0.1)" />
+            <PolarAngleAxis dataKey="label" tick={{ fill: chartTheme.text, fontSize: 10 }} />
+            <PolarRadiusAxis angle={30} domain={[0, "auto"]} tick={false} axisLine={false} />
+            <Radar name="Activity" dataKey="count" stroke={accent} fill={accent} fillOpacity={0.3} />
+            <Tooltip content={<ChartTooltip />} />
+          </RadarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function GFGStreakJourney({ command, accent }) {
+  const streakJourney = buildStreakJourney(command.heatmapRows?.length ? command.heatmapRows : command.rows);
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <h3 className="font-display font-bold text-base mb-2">Streak Journey</h3>
+      <div className="flex justify-between text-xs mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🔥</span>
+          <div>
+            <div className="text-ink-muted text-[10px]">Longest Streak</div>
+            <div className="font-bold text-white">{command.streakLongest} days</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-ink-muted text-[10px]">Current Streak</div>
+          <div className="font-bold text-white">{command.streakCurrent} days</div>
+        </div>
+      </div>
+      <div className="h-32">
+        <ResponsiveContainer>
+          <AreaChart data={streakJourney} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="gfg-streak-journey" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={accent} stopOpacity="0.4" />
+                <stop offset="100%" stopColor={accent} stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: chartTheme.text, fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={20} />
+            <YAxis tick={{ fill: chartTheme.text, fontSize: 9 }} axisLine={false} tickLine={false} width={30} allowDecimals={false} />
+            <Tooltip content={<ChartTooltip />} />
+            <Area dataKey="streak" name="Streak" stroke={accent} strokeWidth={2} fill="url(#gfg-streak-journey)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 function GFGDifficultyBreakdown({ command }) {
   const data = [
-    { name: "Easy", value: command.easy, color: "#10b981" },
+    { name: "School", value: command.school, color: "#64748b" },
+    { name: "Basic",  value: command.basic,  color: "#22d3ee" },
+    { name: "Easy",   value: command.easy,   color: "#10b981" },
     { name: "Medium", value: command.medium, color: "#f59e0b" },
-    { name: "Hard", value: command.hard, color: "#ef4444" },
+    { name: "Hard",   value: command.hard,   color: "#ef4444" },
   ].filter(d => d.value > 0);
 
   return (
     <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
       <h3 className="font-display font-bold text-base mb-4">Difficulty Breakdown</h3>
-      <div className="flex-1 flex items-center justify-center gap-6">
-        <div className="relative h-32 w-32">
+      <div className="flex-1 grid grid-cols-[1fr_auto] gap-4 items-center">
+        <div className="relative h-32 w-32 mx-auto">
           <ResponsiveContainer>
             <PieChart>
-              <Pie data={data} dataKey="value" innerRadius={45} outerRadius={60} paddingAngle={0} stroke="transparent">
+              <Pie data={data} dataKey="value" innerRadius={45} outerRadius={60} paddingAngle={3} stroke="transparent">
                 {data.map((d, i) => <Cell key={i} fill={d.color} />)}
               </Pie>
               <Tooltip content={<ChartTooltip />} />
@@ -1558,22 +1675,16 @@ function GFGDifficultyBreakdown({ command }) {
             <div className="text-[10px] text-ink-muted">Solved</div>
           </div>
         </div>
-        <div className="space-y-3">
-          {data.map(d => {
-            const pct = command.totalSolved > 0 ? ((d.value / command.totalSolved) * 100).toFixed(1) : 0;
-            return (
-              <div key={d.name} className="flex items-center gap-3 text-xs">
-                <div className="flex items-center gap-1.5 w-16">
-                  <span className="w-2 h-2 rounded-sm" style={{ background: d.color }} />
-                  <span className="text-ink-muted">{d.name}</span>
-                </div>
-                <div className="text-white">
-                  <span className="tabular-nums font-bold">{d.value}</span>
-                  <span className="text-ink-faint ml-2">({pct}%)</span>
-                </div>
+        <div className="space-y-2.5">
+          {data.map(d => (
+            <div key={d.name} className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-1.5 w-16">
+                <span className="w-2 h-2 rounded-sm" style={{ background: d.color }} />
+                <span className="text-ink-muted">{d.name}</span>
               </div>
-            );
-          })}
+              <span className="font-bold text-white tabular-nums">{d.value}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -1668,6 +1779,49 @@ function GFGMostSolvedTopics({ command }) {
   );
 }
 
+function GFGDifficultyProgress({ command }) {
+  const difficulties = [
+    { name: "School", value: command.school, color: "#64748b" },
+    { name: "Basic",  value: command.basic,  color: "#22d3ee" },
+    { name: "Easy",   value: command.easy,   color: "#10b981" },
+    { name: "Medium", value: command.medium, color: "#f59e0b" },
+    { name: "Hard",   value: command.hard,   color: "#ef4444" },
+  ].filter(d => d.value > 0);
+
+  const total = command.totalSolved || 1;
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">Difficulty Progress</h3>
+      {difficulties.length > 0 ? (
+        <div className="flex-1 flex flex-col justify-center gap-3.5">
+          {difficulties.map(({ name, value, color }) => (
+            <div key={name}>
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                  <span className="font-medium text-ink-200">{name}</span>
+                </div>
+                <span className="text-ink-faint tabular-nums">{value}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${(value / total) * 100}%`, background: color }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <EmptyState icon="📊" title="No difficulty data" description="Refresh to load difficulty breakdown." />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GFGStreakCalendar({ command, accent, period }) {
   const recent = command.rows.slice(-14).map((row) => ({
     ...row,
@@ -1725,10 +1879,10 @@ function GFGPerformanceSummary({ command }) {
         </span>
       </div>
       <div className="mt-5 grid grid-cols-2 gap-3">
-        <MiniPanel label="This week" value={perf.thisWeek} accent="#22c55e" />
-        <MiniPanel label="Last week" value={perf.lastWeek} accent="#64748b" />
-        <MiniPanel label="Avg difficulty" value={`${perf.avgDifficulty}/3`} accent="#a855f7" />
-        <MiniPanel label="Active days" value={`${perf.activeDays}/7`} accent="#f59e0b" />
+        <MiniPanel label="Solved This Week" value={perf.thisWeek} accent="#22c55e" sub="Last 7 days" />
+        <MiniPanel label="Solved Last Week" value={perf.lastWeek} accent="#64748b" sub="Days 8–14 ago" />
+        <MiniPanel label="Avg Difficulty" value={`${perf.avgDifficulty}/3`} accent="#a855f7" />
+        <MiniPanel label="Active Days (7d)" value={`${perf.activeDays}/7`} accent="#f59e0b" />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
@@ -1773,6 +1927,63 @@ function GFGPerformanceSummary({ command }) {
               : "A few extra active days will make this week look much stronger."}
         </div>
       </div>
+    </div>
+  );
+}
+
+function gfgLangColor(name) {
+  if (!name) return "#a78bfa";
+  const exact = LANG_COLORS[name];
+  if (exact) return exact;
+  const titled = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+  return LANG_COLORS[titled] || LANG_COLORS[name.toUpperCase()] || "#a78bfa";
+}
+
+function gfgLangDisplay(name) {
+  if (!name) return name;
+  // Preserve known stylised names; otherwise title-case the first letter
+  const exact = LANG_COLORS[name];
+  if (exact) return name;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+function GFGLanguageStats({ command }) {
+  const langs = command.languageStats || [];
+  const maxCount = langs[0]?.count || 1;
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">Languages</h3>
+      {langs.length > 0 ? (
+        <div className="space-y-3.5">
+          {langs.slice(0, 6).map((lang) => {
+            const pct = (lang.count / maxCount) * 100;
+            const color = gfgLangColor(lang.name);
+            const displayName = gfgLangDisplay(lang.name);
+            return (
+              <div key={lang.name}>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                    <span className="font-medium text-ink-200">{displayName}</span>
+                  </div>
+                  <span className="text-ink-faint tabular-nums">{lang.count}</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, background: color }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <EmptyState icon="💻" title="No language data" description="Language stats are extracted from your submission history. Trigger a refresh to load." />
+        </div>
+      )}
     </div>
   );
 }
