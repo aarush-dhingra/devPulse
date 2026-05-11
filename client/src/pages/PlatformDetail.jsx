@@ -2287,40 +2287,727 @@ function GFGHeatmapPanel({ command, accent, period }) {
     </div>
   );
 }
-function CodeChefBody({ stats, activity, period, accent }) {
-  const history = (stats.contests || stats.ratingHistory || []).slice(-20).map((c, i) => ({
-    name: c.contestName || c.name || `Contest ${i + 1}`,
-    rating: c.rating || c.newRating || 0,
+// ─── CodeChef helpers ────────────────────────────────────────────────────────
+const CC_TIER = {
+  1: { label: "1★", color: "#9ca3af" },
+  2: { label: "2★", color: "#22c55e" },
+  3: { label: "3★", color: "#3b82f6" },
+  4: { label: "4★", color: "#a855f7" },
+  5: { label: "5★", color: "#eab308" },
+  6: { label: "6★", color: "#f97316" },
+  7: { label: "7★", color: "#ef4444" },
+};
+
+function buildCodeChefPerformance(heatmapRows, ratingData) {
+  const rows = heatmapRows || [];
+  const thisWeek = rows.slice(-7).reduce((sum, r) => sum + Number(r.count || 0), 0);
+  const lastWeek = rows.slice(-14, -7).reduce((sum, r) => sum + Number(r.count || 0), 0);
+  const growth = lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : (thisWeek > 0 ? 100 : 0);
+  const activeDays = rows.slice(-7).filter((r) => Number(r.count || 0) > 0).length;
+
+  const recent5 = (ratingData || []).slice(-5);
+  const ratingTrend =
+    recent5.length >= 2
+      ? (recent5[recent5.length - 1].rating || 0) - (recent5[0].rating || 0)
+      : 0;
+
+  const rankedEntries = (ratingData || []).filter((c) => c.rank > 0);
+  const avgRank = rankedEntries.length
+    ? Math.round(rankedEntries.reduce((sum, c) => sum + c.rank, 0) / rankedEntries.length)
+    : 0;
+  const bestRank = rankedEntries.length
+    ? rankedEntries.reduce((best, c) => (c.rank < best ? c.rank : best), Infinity)
+    : 0;
+
+  const totalDays = rows.length || 1;
+  const total = rows.reduce((sum, r) => sum + Number(r.count || 0), 0);
+  const solvesPerWeek = Math.round((total / totalDays) * 7 * 10) / 10;
+  const projectedMonth = Math.round(solvesPerWeek * 4.3);
+
+  return { thisWeek, lastWeek, growth, activeDays, ratingTrend, avgRank, bestRank, solvesPerWeek, projectedMonth };
+}
+
+function buildCodeChefCommand(stats, activity) {
+  const history = stats.ratingHistory || stats.contests || [];
+  const ratingData = history.map((c, i) => ({
+    name: (c.contestName || c.name || `Contest ${i + 1}`).slice(0, 28),
+    rating: Number(c.rating || c.newRating || 0),
+    rank: Number(c.rank || 0),
+    date: c.date || null,
+    delta:
+      i > 0
+        ? Number(c.rating || c.newRating || 0) -
+          Number(history[i - 1].rating || history[i - 1].newRating || 0)
+        : 0,
   }));
+
+  const heatmapRows = activity.rows;
+  const spark = ratingData.map((r) => r.rating);
+  const weekday = buildWeekdayTotals(heatmapRows);
+  const recent30 = heatmapRows.slice(-30).reduce((sum, r) => sum + Number(r.count || 0), 0);
+
+  const tierKey = Math.max(0, Math.min(7, Number(stats.stars) || 0));
+  const tier = CC_TIER[tierKey] || { label: `${tierKey}★`, color: "#9ca3af" };
+
+  return {
+    ...activity,
+    heatmapRows,
+    weekday,
+    spark,
+    ratingData,
+    recent30,
+    rating: stats.rating || 0,
+    stars: stats.stars || 0,
+    tier,
+    problemsSolved: stats.problemsSolved || 0,
+    partialProblems: stats.partialProblems || 0,
+    contestsAttended: stats.contestsAttended || 0,
+    globalRank: stats.globalRank || 0,
+    countryRank: stats.countryRank || 0,
+    color: stats.color || null,
+    profile: stats.profile || {},
+    performance: buildCodeChefPerformance(heatmapRows, ratingData),
+  };
+}
+
+// ─── CodeChef components ──────────────────────────────────────────────────────
+function CodeChefMetricCard({ label, value, sub, trend, color, spark, icon }) {
   return (
-    <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Current Rating" value={stats.rating ?? 0} icon="🏆" accent="#5b4638" />
-        <StatCard label="Stars" value={stats.stars ? `${stats.stars}★` : "—"} format="raw" icon="⭐" accent="#f59e0b" />
-        <StatCard label="Solved" value={stats.problemsSolved ?? 0} icon="✅" accent="#10b981" />
-        <StatCard label="Contests" value={stats.contestsAttended ?? 0} icon="🎯" accent="#22d3ee" />
+    <div className="rounded-2xl border border-white/5 bg-[#080b18] px-4 py-4 relative flex flex-col justify-between min-h-[110px]">
+      <div>
+        <div className="flex items-start justify-between">
+          <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted mb-2">{label}</div>
+          {icon && (
+            <div
+              className="w-6 h-6 rounded-md flex items-center justify-center text-xs"
+              style={{ background: `${color}1A`, color }}
+            >
+              {icon}
+            </div>
+          )}
+        </div>
+        <div className="text-3xl font-display font-bold tabular-nums text-white">{value}</div>
       </div>
-      <ActivityGrid activity={activity} period={period} accent={accent} />
-      <div className="grid lg:grid-cols-[1fr_1fr] gap-4">
-        <RatingHistory title="Rating History" data={history} color="#8b5e3c" gradientId="cc-grad" />
-        <div className="panel-pad">
-          <h3 className="font-display font-bold text-lg mb-3">Profile</h3>
-          <DataRow label="Username" value={`@${stats.profile?.username || "—"}`} />
-          <DataRow label="Global Rank" value={stats.globalRank?.toLocaleString() || "—"} />
-          <DataRow label="Country Rank" value={stats.countryRank?.toLocaleString() || "—"} />
-          <DataRow label="Partial Solved" value={stats.partialProblems ?? 0} />
-          <DataRow label="Color" value={stats.color || "—"} />
+      <div className="mt-3 flex items-end justify-between">
+        <div className="mb-0.5">
+          {trend && <div className="text-[10px] text-emerald-400 font-medium">↑ {trend}</div>}
+          {sub && !trend && <div className="text-[10px] text-ink-faint">{sub}</div>}
+        </div>
+        {spark?.length ? (
+          <div className="ml-auto w-16 h-6">
+            <Sparkline values={spark} color={color} width={64} height={24} showArea={false} strokeWidth={2} />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CodeChefRatingBadge({ command }) {
+  const { rating, stars, tier } = command;
+  const tierRanges = [
+    [0, 1399], [1400, 1599], [1600, 1799], [1800, 1999],
+    [2000, 2199], [2200, 2499], [2500, 9999],
+  ];
+  const range = tierRanges[Math.max(0, (stars || 1) - 1)] || [0, 9999];
+  const pct =
+    range[1] < 9999
+      ? Math.min(100, Math.max(0, ((rating - range[0]) / (range[1] - range[0] + 1)) * 100))
+      : 100;
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">Rating Tier</h3>
+      <div className="flex-1 flex flex-col items-center justify-center gap-4">
+        <div
+          className="w-20 h-20 rounded-full flex flex-col items-center justify-center border-4"
+          style={{ borderColor: tier.color, background: `${tier.color}15` }}
+        >
+          <div className="text-3xl font-black leading-none" style={{ color: tier.color }}>
+            {stars || "—"}
+          </div>
+          <div className="text-sm" style={{ color: tier.color }}>★</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-display font-bold text-white tabular-nums">{rating || "—"}</div>
+          <div className="text-[10px] text-ink-muted mt-0.5 capitalize">{command.color || tier.label}</div>
+        </div>
+        <div className="w-full">
+          <div className="flex justify-between text-[9px] text-ink-faint mb-1">
+            <span>{range[0]}</span>
+            {range[1] < 9999 && <span>{range[1]}</span>}
+          </div>
+          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, background: tier.color }}
+            />
+          </div>
+          <div className="text-[9px] text-ink-faint mt-1 text-right">{Math.round(pct)}% to next tier</div>
         </div>
       </div>
-      <HighlightStrip
-        items={[
-          { label: "Full solves", value: stats.problemsSolved ?? 0, accent: "#10b981" },
-          { label: "Partial solves", value: stats.partialProblems ?? 0, accent: "#f59e0b" },
-          { label: "Global rank", value: stats.globalRank?.toLocaleString?.() || "—", accent },
-          { label: "Momentum", value: activity.trendLabel, accent: "#22d3ee" },
-        ]}
-      />
-    </>
+    </div>
+  );
+}
+
+function CodeChefTrendChart({ command, accent }) {
+  const data = command.ratingData;
+  if (!data.length) {
+    return (
+      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+        <h3 className="font-display font-bold text-base mb-2">Rating Trend</h3>
+        <EmptyState
+          icon="📈"
+          title="No contest history"
+          description="Participate in rated contests to populate this chart."
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-display font-bold text-base">Rating Trend</h3>
+        <span className="rounded border border-white/10 px-2 py-0.5 text-[10px] text-ink-muted">
+          {data.length} Contests
+        </span>
+      </div>
+      <div className="h-40">
+        <ResponsiveContainer>
+          <AreaChart data={data} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="cc-rating-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={accent} stopOpacity="0.35" />
+                <stop offset="100%" stopColor={accent} stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis
+              dataKey="name"
+              tick={{ fill: chartTheme.text, fontSize: 9 }}
+              axisLine={false}
+              tickLine={false}
+              minTickGap={30}
+            />
+            <YAxis
+              tick={{ fill: chartTheme.text, fontSize: 10 }}
+              axisLine={false}
+              tickLine={false}
+              width={38}
+              domain={["auto", "auto"]}
+              allowDecimals={false}
+            />
+            <Tooltip content={<ChartTooltip />} />
+            <Area
+              type="monotone"
+              dataKey="rating"
+              name="Rating"
+              stroke={accent}
+              strokeWidth={2}
+              fill="url(#cc-rating-grad)"
+              dot={false}
+              activeDot={{ r: 4 }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function CodeChefConsistencyCard({ command }) {
+  const last30 = command.heatmapRows.slice(-30);
+  const activeLast30 = last30.filter((r) => r.count > 0).length;
+  const dots = [
+    ...Array(Math.max(0, 30 - last30.length)).fill(false),
+    ...last30.map((r) => r.count > 0),
+  ];
+  return (
+    <div className="rounded-2xl flex-1 border border-white/5 bg-[#080b18] px-4 py-4 flex flex-col">
+      <div className="text-[10px] uppercase tracking-[0.1em] text-ink-muted mb-2">Consistency</div>
+      <div className="flex items-end gap-2 mb-3">
+        <div className="text-3xl font-display font-bold tabular-nums text-white">{activeLast30}</div>
+        <div className="text-[10px] text-ink-faint pb-1">Active Days (30d)</div>
+      </div>
+      <div className="grid grid-cols-[repeat(15,minmax(0,1fr))] gap-1 mt-auto">
+        {dots.map((active, i) => (
+          <div
+            key={i}
+            className="aspect-square rounded-sm"
+            style={{ background: active ? "#f97316" : "rgba(255,255,255,0.06)" }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CodeChefHeatmapPanel({ command, accent, period }) {
+  const days = periodToDays(period);
+  const { weeks, p95 } = heatmapWeeks(command.rows, days);
+  const hasActivity = command.total > 0;
+
+  const cell = GFG_CELL[period] ?? 13;
+  const gap  = GFG_GAP[period]  ?? 3;
+  const step = cell + gap;
+  const LEFT = 30;
+
+  const monthLabels = [];
+  let lastMonth = null;
+  weeks.forEach((week, wi) => {
+    const firstReal = week.find(Boolean);
+    if (!firstReal) return;
+    const m = firstReal.date.slice(5, 7);
+    if (m !== lastMonth) {
+      lastMonth = m;
+      const label = new Date(`${firstReal.date}T00:00:00Z`).toLocaleString("default", { month: "short" });
+      monthLabels.push({ wi, label });
+    }
+  });
+  const topOffset = monthLabels.length > 1 ? 20 : 6;
+  const svgW = Math.max(weeks.length * step + LEFT, 120);
+  const svgH = topOffset + 7 * step + 4;
+
+  const compactRange = period !== "1y";
+  const recentWeeks = command.weekly.slice(-6).map((week) => ({
+    ...week,
+    weekRange: weekRangeLabel(week.date),
+  }));
+  const maxWeek = Math.max(...recentWeeks.map((week) => Number(week.count || 0)), 1);
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 overflow-hidden">
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div>
+          <h3 className="font-display font-bold text-base">Coding Activity Heatmap</h3>
+          <p className="text-[10px] text-ink-faint mt-1">
+            {hasActivity ? `${command.totalDisplay} across ` : ""}{PERIOD_COPY[period] || "selected range"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-right">
+          <div className="text-lg font-bold text-white">{command.activityRate}%</div>
+          <div className="text-[9px] uppercase tracking-[0.14em] text-ink-faint">hit rate</div>
+        </div>
+      </div>
+
+      <div
+        className={`rounded-2xl border border-white/5 bg-black/10 p-4 ${
+          compactRange ? "grid lg:grid-cols-[auto_1fr] gap-5 items-center" : "overflow-x-auto"
+        }`}
+      >
+        <div className="overflow-x-auto">
+          <svg width={svgW} height={svgH} className="block">
+            {monthLabels.length > 1 &&
+              monthLabels.map(({ wi, label }) => (
+                <text key={`m-${label}-${wi}`} x={LEFT + wi * step} y={12} fill="rgba(148,163,184,0.6)" fontSize="9">
+                  {label}
+                </text>
+              ))}
+            {["Mon", "Wed", "Fri", "Sun"].map((day, i) => (
+              <text
+                key={day}
+                x={0}
+                y={topOffset + (i === 3 ? 6 * step : i * 2 * step) + cell - 1}
+                fill="rgba(148,163,184,0.55)"
+                fontSize="9"
+              >
+                {day}
+              </text>
+            ))}
+            <g transform={`translate(${LEFT},${topOffset})`}>
+              {weeks.map((week, wi) =>
+                week.map((day, di) => {
+                  if (!day) return null;
+                  const level = bucket(day.count, p95);
+                  return (
+                    <rect
+                      key={`${wi}-${di}`}
+                      x={wi * step}
+                      y={di * step}
+                      width={cell}
+                      height={cell}
+                      rx={Math.max(2, Math.round(cell * 0.28))}
+                      fill={level > 0 ? activityColor(accent, level) : "rgba(255,255,255,0.05)"}
+                      stroke={level > 0 ? "rgba(255,255,255,0.08)" : "transparent"}
+                    >
+                      <title>{`${day.date}: ${day.count} problem${day.count !== 1 ? "s" : ""}`}</title>
+                    </rect>
+                  );
+                })
+              )}
+            </g>
+          </svg>
+        </div>
+        {compactRange && (
+          <div className="hidden lg:block min-w-0">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-white">Recent Pace</div>
+                <div className="text-[10px] text-ink-faint">weekly ranges</div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-bold text-orange-400">{command.recent30}</div>
+                <div className="text-[9px] uppercase tracking-[0.14em] text-ink-faint">30d activity</div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {recentWeeks.map((week) => (
+                <div key={week.date} className="grid grid-cols-[86px_1fr_28px] items-center gap-2 text-[10px]">
+                  <span className="text-ink-faint">{week.weekRange}</span>
+                  <span className="h-2 overflow-hidden rounded-full bg-white/5">
+                    <span
+                      className="block h-full rounded-full bg-orange-500"
+                      style={{ width: `${Math.max(6, (Number(week.count || 0) / maxWeek) * 100)}%` }}
+                    />
+                  </span>
+                  <span className="text-right text-white tabular-nums">{week.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <MiniPanel
+          label="Best day"
+          value={hasActivity ? (command.bestDay?.count ?? "—") : "—"}
+          sub={command.bestDay?.date}
+          accent={accent}
+        />
+        <MiniPanel label="Active days" value={command.activeDays} accent="#22c55e" />
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
+          <div className="text-[10px] text-ink-faint mb-2">Intensity</div>
+          <div className="flex items-center gap-1">
+            {[0, 1, 2, 3, 4].map((level) => (
+              <span key={level} className="h-3 w-3 rounded" style={{ background: activityColor(accent, level) }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CodeChefContestHistory({ command }) {
+  const history = command.ratingData.slice(-6).reverse();
+  if (!history.length) {
+    return (
+      <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+        <h3 className="font-display font-bold text-base mb-2">Contest History</h3>
+        <EmptyState icon="🏆" title="No contest history" description="Rated contest results will appear here." />
+      </div>
+    );
+  }
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-3">Contest History</h3>
+      <div className="flex-1 flex flex-col justify-start space-y-3">
+        {history.map((c, i) => (
+          <div key={i} className="flex flex-col gap-0.5 pb-2 border-b border-white/5 last:border-0">
+            <span className="text-xs text-white truncate" title={c.name}>{c.name}</span>
+            <div className="flex items-center gap-2 text-[10px]">
+              <span className={c.delta >= 0 ? "text-emerald-400" : "text-red-400"}>
+                {c.delta >= 0 ? "↑" : "↓"} {Math.abs(c.delta)} ({c.rating})
+              </span>
+              {c.rank > 0 && (
+                <span className="text-ink-faint">Rank #{c.rank.toLocaleString()}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CodeChefProfileCard({ command }) {
+  const p = command.profile || {};
+  const rows = [
+    p.name && ["Name", p.name],
+    p.country && ["Country", p.country],
+    p.institution && ["Institution", p.institution],
+    command.globalRank > 0 && ["Global Rank", `#${command.globalRank.toLocaleString()}`],
+    command.countryRank > 0 && ["Country Rank", `#${command.countryRank.toLocaleString()}`],
+    command.color && ["Tier", command.color.charAt(0).toUpperCase() + command.color.slice(1)],
+    command.partialProblems > 0 && ["Partial Solves", command.partialProblems],
+  ].filter(Boolean);
+
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex flex-col">
+      <h3 className="font-display font-bold text-base mb-4">Profile</h3>
+      <div className="flex-1 space-y-0">
+        {rows.length ? (
+          rows.map(([label, value]) => (
+            <div
+              key={label}
+              className="flex items-center justify-between gap-3 py-2 border-b border-white/5 last:border-0"
+            >
+              <span className="text-xs text-ink-muted">{label}</span>
+              <span className="text-xs font-medium text-white truncate max-w-[55%] text-right">{value}</span>
+            </div>
+          ))
+        ) : (
+          <EmptyState icon="👤" title="No profile data" description="Refresh to load profile details." />
+        )}
+      </div>
+      {p.username && (
+        <a
+          href={`https://www.codechef.com/users/${p.username}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 text-center text-[10px] text-ink-faint hover:text-orange-400 transition border border-white/5 rounded-lg py-1.5 block"
+        >
+          View on CodeChef ↗
+        </a>
+      )}
+    </div>
+  );
+}
+
+function CodeChefRhythmPanel({ command, accent }) {
+  if (!command.weekday?.length) {
+    return (
+      <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+        <h3 className="font-display font-bold text-base mb-2">Activity Rhythm</h3>
+        <EmptyState icon="📊" title="No data" description="No daily activity data found." />
+      </div>
+    );
+  }
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <h3 className="font-display font-bold text-base mb-2">Activity Rhythm</h3>
+      <div className="h-40">
+        <ResponsiveContainer>
+          <RadarChart cx="50%" cy="50%" outerRadius="70%" data={command.weekday}>
+            <PolarGrid stroke="rgba(255,255,255,0.1)" />
+            <PolarAngleAxis dataKey="label" tick={{ fill: chartTheme.text, fontSize: 10 }} />
+            <PolarRadiusAxis angle={30} domain={[0, "auto"]} tick={false} axisLine={false} />
+            <Radar name="Activity" dataKey="count" stroke={accent} fill={accent} fillOpacity={0.3} />
+            <Tooltip content={<ChartTooltip />} />
+          </RadarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function CodeChefStreakJourney({ command, accent }) {
+  const streakJourney = buildStreakJourney(command.heatmapRows);
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5">
+      <h3 className="font-display font-bold text-base mb-2">Streak Journey</h3>
+      <div className="flex justify-between text-xs mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🔥</span>
+          <div>
+            <div className="text-ink-muted text-[10px]">Longest Streak</div>
+            <div className="font-bold text-white">{command.streakLongest} days</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-ink-muted text-[10px]">Current Streak</div>
+          <div className="font-bold text-white">{command.streakCurrent} days</div>
+        </div>
+      </div>
+      <div className="h-28">
+        <ResponsiveContainer>
+          <AreaChart data={streakJourney} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="cc-streak-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={accent} stopOpacity="0.4" />
+                <stop offset="100%" stopColor={accent} stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: chartTheme.text, fontSize: 9 }}
+              axisLine={false}
+              tickLine={false}
+              minTickGap={20}
+            />
+            <YAxis
+              tick={{ fill: chartTheme.text, fontSize: 9 }}
+              axisLine={false}
+              tickLine={false}
+              width={30}
+              allowDecimals={false}
+            />
+            <Tooltip content={<ChartTooltip />} />
+            <Area dataKey="streak" name="Streak" stroke={accent} strokeWidth={2} fill="url(#cc-streak-grad)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function CodeChefPerformanceSummary({ command }) {
+  const perf = command.performance;
+  const positive = perf.growth >= 0;
+  const ratingUp = perf.ratingTrend >= 0;
+  return (
+    <div className="panel-pad !bg-[#070a16]/90 border border-white/5 flex h-full flex-col">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="font-display font-bold text-base">Performance Summary</h3>
+          <p className="text-[10px] text-ink-faint mt-1">This week vs last week</p>
+        </div>
+        <span
+          className={`rounded-full px-2 py-1 text-[10px] ${
+            positive ? "bg-emerald-400/10 text-emerald-300" : "bg-red-400/10 text-red-300"
+          }`}
+        >
+          {positive ? "+" : ""}{perf.growth}%
+        </span>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <MiniPanel label="Solved This Week" value={perf.thisWeek} accent="#22c55e" sub="Last 7 days" />
+        <MiniPanel label="Solved Last Week" value={perf.lastWeek} accent="#64748b" sub="Days 8–14 ago" />
+        <MiniPanel label="Active Days (7d)" value={`${perf.activeDays}/7`} accent="#f97316" />
+        <MiniPanel
+          label="Rating Trend"
+          value={`${ratingUp ? "+" : ""}${perf.ratingTrend}`}
+          accent={ratingUp ? "#22c55e" : "#ef4444"}
+          sub="Last 5 contests"
+        />
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-ink-faint">Avg Contest Rank</div>
+          <div className="mt-2 flex items-end gap-2">
+            <span className="text-xl font-bold text-white">
+              {perf.avgRank > 0 ? `#${perf.avgRank.toLocaleString()}` : "—"}
+            </span>
+          </div>
+          <div className="mt-2 text-[10px] text-ink-faint">
+            Best: {perf.bestRank > 0 && perf.bestRank < Infinity ? `#${perf.bestRank.toLocaleString()}` : "—"}
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3">
+          <div className="text-[10px] uppercase tracking-[0.14em] text-ink-faint">Pace</div>
+          <div className="mt-2 flex items-end gap-2">
+            <span className="text-xl font-bold text-white">{perf.solvesPerWeek}</span>
+            <span className="pb-1 text-[10px] text-ink-muted">solves/wk</span>
+          </div>
+          <div className="mt-2 text-[10px] text-ink-faint">~{perf.projectedMonth} projected monthly</div>
+        </div>
+      </div>
+
+      <div className="mt-auto pt-5">
+        <div className="rounded-xl border border-orange-400/10 bg-orange-400/[0.03] p-3 text-[11px] text-ink-muted">
+          <span className="font-semibold text-orange-300">Story: </span>
+          {perf.ratingTrend > 0
+            ? "Your rating is climbing. Keep attending contests to maintain momentum."
+            : perf.activeDays >= 4
+              ? "Consistency is solid. Contest participation will reflect your practice."
+              : "More active days will build the base for a stronger contest performance."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CodeChef main body ───────────────────────────────────────────────────────
+function CodeChefBody({ stats, activity, period, accent }) {
+  const command = buildCodeChefCommand(stats, activity);
+  return (
+    <div className="space-y-4">
+      {/* ROW 1: 6 metric cards */}
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-3">
+        <CodeChefMetricCard
+          label="Current Rating"
+          value={command.rating || "—"}
+          color={command.tier.color}
+          spark={command.spark}
+          sub={command.tier.label}
+        />
+        <CodeChefMetricCard
+          label="Stars"
+          value={command.stars ? `${command.stars}★` : "—"}
+          color="#f59e0b"
+        />
+        <CodeChefMetricCard
+          label="Problems Solved"
+          value={command.problemsSolved}
+          color="#10b981"
+          icon="✅"
+          trend={command.recent30 > 0 ? `${command.recent30} this month` : undefined}
+        />
+        <CodeChefMetricCard
+          label="Partial Solved"
+          value={command.partialProblems}
+          color="#f59e0b"
+          icon="⚡"
+        />
+        <CodeChefMetricCard
+          label="Contests"
+          value={command.contestsAttended}
+          color="#22d3ee"
+          icon="🎯"
+        />
+        <CodeChefMetricCard
+          label="Global Rank"
+          value={command.globalRank > 0 ? `#${command.globalRank.toLocaleString()}` : "—"}
+          color="#a855f7"
+          icon="🌍"
+        />
+      </div>
+
+      {/* ROW 2: Rating badge | Rating trend chart | Country rank + Consistency */}
+      <div className="grid xl:grid-cols-[1.1fr_2fr_0.9fr] gap-3 items-stretch">
+        <CodeChefRatingBadge command={command} />
+        <CodeChefTrendChart command={command} accent={accent} />
+        <div className="flex flex-col gap-3">
+          <CodeChefMetricCard
+            label="Country Rank"
+            value={command.countryRank > 0 ? `#${command.countryRank.toLocaleString()}` : "—"}
+            color="#22d3ee"
+            sub="National standing"
+          />
+          <CodeChefConsistencyCard command={command} />
+        </div>
+      </div>
+
+      {/* ROW 3: Heatmap | Contest history | Profile */}
+      <div className="grid xl:grid-cols-[2fr_1fr_1fr] gap-3 items-stretch">
+        <CodeChefHeatmapPanel command={command} accent={accent} period={period} />
+        <CodeChefContestHistory command={command} />
+        <CodeChefProfileCard command={command} />
+      </div>
+
+      {/* ROW 4/5: Rhythm + Streak + Performance (row-span-2) | Best rank + Rating trend cards */}
+      <div className="grid xl:grid-cols-3 gap-3 items-stretch">
+        <CodeChefRhythmPanel command={command} accent={accent} />
+        <CodeChefStreakJourney command={command} accent={accent} />
+        <div className="xl:row-span-2">
+          <CodeChefPerformanceSummary command={command} />
+        </div>
+        <CodeChefMetricCard
+          label="Best Contest Rank"
+          value={
+            command.performance.bestRank > 0 && command.performance.bestRank < Infinity
+              ? `#${command.performance.bestRank.toLocaleString()}`
+              : "—"
+          }
+          color="#f97316"
+          sub={
+            command.performance.avgRank > 0
+              ? `Avg: #${command.performance.avgRank.toLocaleString()}`
+              : "No ranked contests yet"
+          }
+        />
+        <CodeChefMetricCard
+          label="Rating Trend (5c)"
+          value={`${command.performance.ratingTrend >= 0 ? "+" : ""}${command.performance.ratingTrend}`}
+          color={command.performance.ratingTrend >= 0 ? "#22c55e" : "#ef4444"}
+          sub="Last 5 contests"
+        />
+      </div>
+    </div>
   );
 }
 
